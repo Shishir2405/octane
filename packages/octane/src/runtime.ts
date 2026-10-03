@@ -4740,9 +4740,9 @@ function forSlotParkable(state: ForSlot): boolean {
  * window — the first record is the pre-render one, which is the one to go back
  * to.
  */
-function journalForSlot(state: ForSlot): void {
+function journalForSlot(state: ForSlot): false {
 	const seen = TRANSITION_JOURNAL_BAGS!;
-	if ((seen.get(state) ?? -1) >= TRANSITION_JOURNAL_CHECKPOINT) return;
+	if ((seen.get(state) ?? -1) >= TRANSITION_JOURNAL_CHECKPOINT) return false;
 	seen.set(state, TRANSITION_JOURNAL!.length);
 	if (
 		ROOT_RENDER_TRANSACTION !== null &&
@@ -4756,17 +4756,13 @@ function journalForSlot(state: ForSlot): void {
 			seen.delete(state);
 		});
 		journalRootRange(domNode(state.start).parentNode!, state.start, state.end);
-		// No chain is restored here, so rows keep their indices individually.
-		for (let b: Block | null = state.head; b !== null; b = b.nextSibling)
-			TRANSITION_JOURNAL!.push(JOURNAL_PROP, b, 'itemIndex', b.itemIndex);
-		return;
+		return false;
 	}
+	// Rollback also restores each row's itemIndex from its chain position: every
+	// reconcile leaves a row's index equal to its position, and reconcileKeyed
+	// records the shape before it writes the first survivor index.
 	const chain: Block[] = [];
-	// Rollback restores each row's itemIndex from its chain position. A row whose
-	// index already differs from that position keeps its exact value here.
-	let indices: Map<Block, number> | null = null;
 	for (let b: Block | null = state.head; b !== null; b = b.nextSibling) {
-		if (b.itemIndex !== chain.length) (indices ??= new Map()).set(b, b.itemIndex);
 		chain.push(b);
 	}
 	// The key Map keeps insertion order through earlier reorders. Preserve that
@@ -4780,22 +4776,11 @@ function journalForSlot(state: ForSlot): void {
 	const snapshot = {
 		empty: state.emptyBlock,
 		mapOrder,
-		indices,
 	};
 	journalUndo(() => {
 		restoreForSlot(state, snapshot, chain);
 		TRANSITION_JOURNAL_BAGS!.delete(state);
 	});
-}
-
-/**
- * Before a survivor's first index write, record the list's shape instead of
- * the index. An index moves only when membership or order does, which takes
- * this snapshot anyway, and its chain restores every row's index on rollback.
- * Returns false once the snapshot exists, which ends the reconcile's checks.
- */
-function journalSurvivorIndex(state: ForSlot): false {
-	journalForSlot(state);
 	return false;
 }
 
@@ -4850,13 +4835,12 @@ function restoreForSlot(state: ForSlot, snapshot: any, chain: Block[] | null): v
 	if (preservedMap !== null) state.items = preservedMap;
 	else {
 		const originalChain = chain!;
-		const indices: Map<Block, number> | null = snapshot.indices;
 		state.items.clear();
 		for (let i = 0; i < originalChain.length; i++) {
 			const block = originalChain[i];
 			block.nextSibling = originalChain[i + 1] ?? null;
 			block.prevSibling = originalChain[i - 1] ?? null;
-			block.itemIndex = indices?.get(block) ?? i;
+			block.itemIndex = i;
 		}
 		const keyOrder: Block[] = snapshot.mapOrder ?? originalChain;
 		for (let i = 0; i < keyOrder.length; i++) {
@@ -45579,8 +45563,8 @@ function updateSurvivor<T>(
 	// the body can't observe position (indexIndependent — the common index-less
 	// `@for`) or the position is also unchanged. This is what makes a pure reorder
 	// (shuffle / reverse / rotate) move survivors' DOM without re-rendering them.
-	// The list's shape snapshot restores itemIndex from chain order, and
-	// reconcileKeyed takes it before the first index write (journalSurvivorIndex).
+	// The list's shape record restores itemIndex from chain order; reconcileKeyed
+	// takes it before the first survivor index write.
 	const journal = ROOT_RENDER_TRANSACTION !== null && !ROOT_RENDER_ROLLBACK;
 	if (journal && block.body !== itemBody) journalRootProperty(block, 'body', block.body);
 	if (pure && block.props === newItem && (indexIndependent || block.itemIndex === newIdx)) {
@@ -45909,6 +45893,8 @@ function reconcileKeyed<T>(
 	// Scalar survivor updates journal their own bindings. Capture the chain and
 	// key map only if reconciliation actually changes membership or order, so
 	// unchanged lists do not allocate a second O(N) representation every render.
+	// A survivor's index moves only with that order, so the first index write
+	// takes the capture too, and rollback restores indices from the chain.
 	let journalShape = TRANSITION_JOURNAL !== null;
 
 	// Fast path: empty → fill — the linear first-fill pass (callers on the
@@ -45973,7 +45959,7 @@ function reconcileKeyed<T>(
 			block.body !== itemBody ||
 			block.itemIndex !== prefixLen
 		) {
-			if (journalShape && block.itemIndex !== prefixLen) journalShape = journalSurvivorIndex(state);
+			if (journalShape && block.itemIndex !== prefixLen) journalShape = journalForSlot(state);
 			updateSurvivor(block, newItem, prefixLen, itemBody, pure, lite, indexIndependent, state.env);
 		}
 		oldFirst = block.nextSibling!;
@@ -45995,7 +45981,7 @@ function reconcileKeyed<T>(
 		const block = oldLast;
 		// Same stable-survivor skip as the prefix walk (see above).
 		if (!pure || block.props !== newItem || block.body !== itemBody || block.itemIndex !== newEnd) {
-			if (journalShape && block.itemIndex !== newEnd) journalShape = journalSurvivorIndex(state);
+			if (journalShape && block.itemIndex !== newEnd) journalShape = journalForSlot(state);
 			updateSurvivor(block, newItem, newEnd, itemBody, pure, lite, indexIndependent, state.env);
 		}
 		oldLast = block.prevSibling!;
@@ -46161,10 +46147,7 @@ function reconcileKeyed<T>(
 			const next: Block | null = cur!.nextSibling!;
 			const newRelIdx = newKeysToIdx.get(cur!.key);
 			if (newRelIdx === undefined) {
-				if (journalShape) {
-					journalForSlot(state);
-					journalShape = false;
-				}
+				if (journalShape) journalShape = journalForSlot(state);
 				if (itemRemovalDefers()) parkItemForHold(cur!);
 				else unmountBlock(cur!);
 				oldItems.delete(cur!.key);
@@ -46183,7 +46166,7 @@ function reconcileKeyed<T>(
 					cur!.body !== itemBody ||
 					cur!.itemIndex !== newIdx
 				) {
-					if (journalShape && cur!.itemIndex !== newIdx) journalShape = journalSurvivorIndex(state);
+					if (journalShape && cur!.itemIndex !== newIdx) journalShape = journalForSlot(state);
 					updateSurvivor(cur!, newItem, newIdx, itemBody, pure, lite, indexIndependent, state.env);
 				}
 			}
