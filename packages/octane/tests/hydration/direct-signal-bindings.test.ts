@@ -1548,7 +1548,11 @@ describe('signal-capable text hole mounts', () => {
 			around: ['A', 'B'],
 		},
 		// A custom element's template keeps no placeholder.
-		unseeded: { markup: '<x-text>{props.value as string}</x-text>', host: 'x-text', around: ['', ''] },
+		unseeded: {
+			markup: '<x-text>{props.value as string}</x-text>',
+			host: 'x-text',
+			around: ['', ''],
+		},
 	} as const;
 	const mounts = { primitive: [7, '7'], null: [null, ''], handle: [undefined, 'alpha'] } as const;
 
