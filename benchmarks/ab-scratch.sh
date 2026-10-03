@@ -30,8 +30,8 @@ old_tree() {
 	for f in "$@"; do (cd "/tmp/old-$sha" && pnpm --filter "$f" build) >"$OUT/build-old-$sha-$f.log" 2>&1 || { tail -50 "$OUT/build-old-$sha-$f.log"; return 1; }; done
 }
 
-STACK=2d53ed2677a2d37e0f1fa9c7a71af70a28b2b1a8
-MAIN=950ef0b0bdf3b6bc4c7d2c96fb3cbf6a77d1ee30
+STACK=2d53ed26775ff3fbe274ffc10830de7e1c9d4235
+MAIN=950ef0b0bd80b87e8a2777b068dec65c6905eabb
 PR639=73b22fd1185db202f218e1a7e9e230571ef01c30
 
 pnpm --filter octane-tsrx-memowall-bench build >"$OUT/build-new-octane.log" 2>&1 || { tail -50 "$OUT/build-new-octane.log"; exit 1; }
