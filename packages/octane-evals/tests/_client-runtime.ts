@@ -12,6 +12,7 @@ export {
 	isRenderCall,
 	deferRecord,
 	bindSignalText,
+	mountSignalText,
 	bindSignalChild,
 	bindSignalAttribute,
 	bindSignalStyleProperty,

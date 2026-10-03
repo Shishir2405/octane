@@ -1607,6 +1607,7 @@ const INTERNAL_CLIENT_RUNTIME_HELPERS = new Set([
 	'isRenderCall',
 	'deferRecord',
 	'bindSignalText',
+	'mountSignalText',
 	'bindSignalChild',
 	'bindSignalAttribute',
 	'hydrateClaimedBindingCaches',
@@ -26935,8 +26936,10 @@ function planJsx(
 		if (!b.signalDirect && (b.kind === 'text' || b.kind === 'textOnlyChild')) {
 			ctx.runtimeNeeded.add('setText');
 		}
-		if (b.kind === 'text') ctx.runtimeNeeded.add(b.bindingMarker ? 'bindingText' : 'htextSwap');
-		if (b.kind === 'textOnlyChild') ctx.runtimeNeeded.add('htext');
+		if (mountsSignalText(b)) ctx.runtimeNeeded.add('mountSignalText');
+		else if (b.kind === 'text')
+			ctx.runtimeNeeded.add(b.bindingMarker ? 'bindingText' : 'htextSwap');
+		else if (b.kind === 'textOnlyChild') ctx.runtimeNeeded.add('htext');
 		// Mounts use the unconditional writer; reactive scalar bindings use either
 		// that writer behind an inline guard or its compact comparison helper.
 		// Claim both authored-name tokens when both paths exist, and do not retain
@@ -28696,13 +28699,22 @@ function directSignalBindingHelper(bind) {
 	return 'bindSignalAttribute';
 }
 
+// A direct text binding outside a binding view mounts through mountSignalText.
+function mountsSignalText(bind) {
+	return (
+		bind.signalDirect === true &&
+		bind.bindingMarker == null &&
+		(bind.kind === 'text' || bind.kind === 'textOnlyChild')
+	);
+}
+
 function directSignalBindingArgs(bind, host, previous, value = bind.expr, previousValue) {
 	const common = [b.id('__s'), previous, host];
 	if (bind.kind === 'text' || bind.kind === 'textOnlyChild') {
-		// (…, onlyChild, previousValue, seededText, bindingMarker). An ordinary
-		// update passes only its raw-value cache: seededText matters only before
-		// the first write. A binding-view marker stays on every call because
-		// presentation hydration can replay a retry through the update path.
+		// (…, onlyChild, previousValue, bindingMarker). An ordinary update passes
+		// only its raw-value cache; mountSignalText owns the seeded placeholder.
+		// A binding-view marker stays on every call because presentation
+		// hydration can replay a retry through the update path.
 		return [
 			...common,
 			value,
@@ -28710,9 +28722,6 @@ function directSignalBindingArgs(bind, host, previous, value = bind.expr, previo
 			b.literal(bind.kind === 'textOnlyChild'),
 			...optionalCallArgs(
 				previousValue ?? null,
-				bind.seededText && (previousValue === undefined || bind.bindingMarker)
-					? b.literal(1)
-					: null,
 				bind.bindingMarker ? b.literal(bind.bindingMarker) : null,
 			),
 		];
@@ -28767,33 +28776,46 @@ function emitBindingMount(bind, elVar, bag) {
 	const signalHelper = directSignalBindingHelper(bind);
 	if (signalHelper !== null) {
 		const text = bind.kind === 'text' || bind.kind === 'textOnlyChild';
-		let mount = b.call(
-			attrLoweringToken(b.id(`_$${signalHelper}`), bind),
-			...directSignalBindingArgs(bind, el(), undefinedNode(), text ? V() : bind.expr),
-		);
-		if (text) {
-			// A possible handle is not a subscription. Primitive text mounts through
-			// the canonical hydration/seeded-placeholder writer, without journaling
-			// a freshly cloned Text as though it were an existing update target.
-			const scalarMount =
-				bind.kind === 'textOnlyChild'
-					? b.call('_$htext', el(), V(), ...(bind.seededText ? [b.literal(1)] : []))
-					: bind.bindingMarker
-						? b.call('_$bindingText', el(), V(), b.literal(bind.bindingMarker))
-						: b.call('_$htextSwap', el(), V());
-			mount = b.conditional(
-				b.logical(
-					'||',
-					b.binary('===', V(), b.literal(null)),
-					b.logical(
-						'&&',
-						b.binary('!==', b.unary('typeof', V()), b.literal('object')),
-						b.binary('!==', b.unary('typeof', V()), b.literal('function')),
-					),
+		let mount;
+		if (mountsSignalText(bind)) {
+			// One call per site: the runtime sends a primitive or null to the
+			// canonical writer and a possible handle to bindSignalText.
+			mount = b.call(
+				attrLoweringToken(b.id('_$mountSignalText'), bind),
+				b.id('__s'),
+				el(),
+				V(),
+				b.literal(bind.signalSite, JSON.stringify(bind.signalSite)),
+				...optionalCallArgs(
+					bind.kind === 'textOnlyChild' ? b.literal(true) : null,
+					bind.seededText ? b.literal(1) : null,
 				),
-				scalarMount,
-				mount,
 			);
+		} else {
+			mount = b.call(
+				attrLoweringToken(b.id(`_$${signalHelper}`), bind),
+				...directSignalBindingArgs(bind, el(), undefinedNode(), text ? V() : bind.expr),
+			);
+			if (text) {
+				// A binding view's marker text makes the same split at the call site:
+				// presentation hydration audits and wraps bindSignalText by name. A
+				// possible handle is not a subscription, so primitive text mounts
+				// through bindingText without journaling the fresh Text as an update
+				// target.
+				mount = b.conditional(
+					b.logical(
+						'||',
+						b.binary('===', V(), b.literal(null)),
+						b.logical(
+							'&&',
+							b.binary('!==', b.unary('typeof', V()), b.literal('object')),
+							b.binary('!==', b.unary('typeof', V()), b.literal('function')),
+						),
+					),
+					b.call('_$bindingText', el(), V(), b.literal(bind.bindingMarker)),
+					mount,
+				);
+			}
 		}
 		return st(
 			b.block([

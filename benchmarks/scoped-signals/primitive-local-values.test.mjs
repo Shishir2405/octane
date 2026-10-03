@@ -7,6 +7,7 @@ import { exerciseLateInstanceModels, measurePrimitiveLocalSSR } from './primitiv
 
 const adapters = new Set([
 	'bindSignalText',
+	'mountSignalText',
 	'bindSignalAttribute',
 	'bindSignalValue',
 	'bindSignalChecked',

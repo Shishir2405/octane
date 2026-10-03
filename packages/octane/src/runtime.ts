@@ -22569,15 +22569,15 @@ function preparePresentationSignalBinding(
 				frame.witnesses.set(handle!, finishNativeReadWitness(witness, readCompleted));
 		}
 		// bindSignalText(scope, previous, position, value, site, onlyChild,
-		// previousValue, seededText, bindingMarker): the marker is argument 8.
+		// previousValue, bindingMarker): the marker is argument 7.
 		if (
 			text &&
 			((current !== null && (typeof current === 'object' || typeof current === 'function')) ||
-				typeof args[8] !== 'string')
+				typeof args[7] !== 'string')
 		)
 			presentationMiss(false);
 		const prepared = text
-			? bindingText(element, current, args[8])
+			? bindingText(element, current, args[7])
 			: preparedPresentationAttribute(element, name!, current, attributeKind!);
 		if (handle === null) {
 			if (text) {
@@ -23866,11 +23866,12 @@ function bindDirectSignal(
 }
 
 /**
- * @internal Compiler target for a direct signal/scalar text binding.
+ * @internal Compiler target for a direct signal/scalar text binding's updates,
+ * and for the mount of a binding view's marker text. mountSignalText mounts
+ * every other text binding.
  *
  * Updates pass `previousValue` (the bag's raw-value cache) right after
- * `onlyChild`; `seededText` and `bindingMarker` only matter while `previous` is
- * still undefined, so compiled updates omit them.
+ * `onlyChild`. A binding view's `bindingMarker` follows it on every call.
  */
 export function bindSignalText(
 	scope: Scope,
@@ -23880,7 +23881,6 @@ export function bindSignalText(
 	site: string,
 	onlyChild = false,
 	previousValue?: unknown,
-	seededText: 1 | undefined = undefined,
 	bindingMarker?: string,
 ): unknown {
 	// Keep the ordinary text cache in the compiler's existing binding bag. A
@@ -23902,12 +23902,6 @@ export function bindSignalText(
 			bindingMarker,
 		);
 	}
-	// Only the compiler's fresh native template placeholder is already owned.
-	// Hydration still goes through htext to adopt and advance the server cursor.
-	if (previous === undefined && onlyChild && seededText === 1 && activeHydration() === null) {
-		const text = getFirstChild(position);
-		if (text instanceof Text) previous = text;
-	}
 	const prior = previous as DirectSignalBinding | undefined;
 	return bindDirectSignal(
 		scope,
@@ -23916,6 +23910,37 @@ export function bindSignalText(
 		value,
 		site,
 		onlyChild ? DIRECT_SIGNAL_TEXT_ONLY_POLICY : DIRECT_SIGNAL_TEXT_POLICY,
+	);
+}
+
+/**
+ * @internal Compiler mount for a direct text binding outside a binding view.
+ * A primitive or null cannot be a handle, so it mounts through the canonical
+ * writer without journaling the freshly cloned Text as an update target. An
+ * object or function may be a handle and goes to bindSignalText. Either way the
+ * site makes one call; updates keep their guard inline so an unchanged
+ * primitive costs none. `seededText` marks an only child's template placeholder.
+ */
+export function mountSignalText(
+	scope: Scope,
+	position: Node,
+	value: unknown,
+	site: string,
+	onlyChild?: boolean,
+	seededText?: 1,
+): unknown {
+	if (typeof value === 'object' ? value === null : typeof value !== 'function')
+		return onlyChild ? htext(position, value, seededText) : htextSwap(position, value);
+	// Only the compiler's fresh native template placeholder is already owned.
+	// Hydration still goes through htext to adopt and advance the server cursor.
+	const text = seededText && activeHydration() === null && getFirstChild(position);
+	return bindSignalText(
+		scope,
+		text instanceof Text ? text : undefined,
+		position,
+		value,
+		site,
+		onlyChild,
 	);
 }
 

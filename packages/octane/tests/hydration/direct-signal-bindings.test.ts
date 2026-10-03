@@ -1534,6 +1534,131 @@ export function App(props) @{
 	);
 });
 
+describe('signal-capable text hole mounts', () => {
+	// An opaque prop can carry a signal handle, so its text hole mounts whatever
+	// value arrives first: a primitive, null, or a live handle. Each must render
+	// once into one Text node at the hole, adopt the server's text when
+	// hydrating, and leave a binding that later scalar and signal updates reuse.
+	const holes = {
+		// The compiler seeds a placeholder Text in a native host's template.
+		onlyChild: { markup: '<p>{props.value as string}</p>', host: 'p', around: ['', ''] },
+		sibling: {
+			markup: '<p><b>A</b>{props.value as string}<b>B</b></p>',
+			host: 'p',
+			around: ['A', 'B'],
+		},
+		// A custom element's template keeps no placeholder.
+		unseeded: { markup: '<x-text>{props.value as string}</x-text>', host: 'x-text', around: ['', ''] },
+	} as const;
+	const mounts = { primitive: [7, '7'], null: [null, ''], handle: [undefined, 'alpha'] } as const;
+
+	it.each(
+		[false, true].flatMap((dev) =>
+			(['tsrx', 'tsx'] as const).flatMap((ext) =>
+				[false, true].flatMap((strong) =>
+					([false, 'match', 'mismatch'] as const).flatMap((hydrate) =>
+						(Object.keys(holes) as (keyof typeof holes)[]).flatMap((hole) =>
+							(Object.keys(mounts) as (keyof typeof mounts)[]).map((mount) => ({
+								dev,
+								ext,
+								strong,
+								hydrate,
+								hole,
+								mount,
+							})),
+						),
+					),
+				),
+			),
+		),
+	)('mounts the first value and keeps the binding live (%j)', async (options) => {
+		const { dev, ext, strong, hydrate, hole, mount } = options;
+		const { markup, host: hostTag, around } = holes[hole];
+		const source = `export function App(props) ${ext === 'tsrx' ? '@' : ''}{ ${ext === 'tsx' ? 'return ' : ''}${markup}${ext === 'tsx' ? ';' : ''} }`;
+		const id = `/src/text-hole-mount-${hole}.${ext}`;
+		const compileOptions = { dev, hmr: false, strong };
+		const client = loadCompiledFixtureSource(source, { id, mode: 'client', compileOptions });
+		const owner = createScope({ scopeKey: `text-hole-mount-${JSON.stringify(options)}` });
+		const value$ = owner.signal$('value', 'alpha');
+		const [scalar, rendered] = mounts[mount];
+		const first = mount === 'handle' ? value$ : scalar;
+		const container = document.createElement('div');
+		document.body.append(container);
+		const errors = vi.spyOn(console, 'error');
+		const read = () => container.querySelector(hostTag)!.textContent;
+		const expected = (text: string) => around[0] + text + around[1];
+		// The hole's Text node: the host's only direct Text child.
+		const holeText = (host: Element) => {
+			const texts = [...host.childNodes].filter((node) => node.nodeType === 3);
+			expect(texts).toHaveLength(1);
+			return texts[0];
+		};
+		let root: Root | undefined;
+		try {
+			let serverHost: Element | undefined;
+			if (hydrate) {
+				const server = loadCompiledFixtureSource(source, { id, mode: 'server', compileOptions });
+				// A matching server rendered the handle's current value as plain text.
+				const serverValue =
+					hydrate === 'mismatch' ? 'server' : mount === 'handle' ? rendered : scalar;
+				container.innerHTML = renderToString(server.App, { value: serverValue }).html;
+				serverHost = container.querySelector(hostTag)!;
+				const serverText = hydrate === 'mismatch' || rendered === '' ? null : holeText(serverHost);
+				await act(() => {
+					root = hydrateRoot(container, client.App, { value: first }, { signalOwner: owner });
+				});
+				expect(container.querySelector(hostTag)).toBe(serverHost);
+				if (serverText !== null) expect(holeText(serverHost)).toBe(serverText);
+			} else {
+				root = createRoot(container, { signalOwner: owner });
+				root.render(client.App, { value: first });
+			}
+			const host = container.querySelector(hostTag)!;
+			const bold = [...host.querySelectorAll('b')];
+			expect(read()).toBe(expected(rendered));
+			// Only a dev build can locate, and so report, the client's text winning.
+			if (hydrate === 'mismatch' && dev) {
+				expect(errors.mock.calls.map(([message]) => String(message))).toEqual([
+					expect.stringContaining('hydration mismatch'),
+				]);
+				errors.mockClear();
+			}
+			expect(errors).not.toHaveBeenCalled();
+
+			if (mount === 'handle') {
+				await act(() => owner.set(value$, 'beta'));
+				expect(read()).toBe(expected('beta'));
+			} else {
+				await act(() => root!.render(client.App, { value: value$ }));
+				expect(read()).toBe(expected('alpha'));
+				await act(() => owner.set(value$, 'beta'));
+				expect(read()).toBe(expected('beta'));
+			}
+			const text = holeText(host);
+			await act(() => root!.render(client.App, { value: 'scalar' }));
+			expect(read()).toBe(expected('scalar'));
+			// The replaced handle no longer writes, and the hole keeps its Text node.
+			await act(() => owner.set(value$, 'retired'));
+			expect(read()).toBe(expected('scalar'));
+			await act(() => root!.render(client.App, { value: null }));
+			expect(read()).toBe(expected(''));
+			await act(() => root!.render(client.App, { value: 8 }));
+			expect(read()).toBe(expected('8'));
+			expect(holeText(host)).toBe(text);
+			expect(container.querySelector(hostTag)).toBe(host);
+			const after = [...host.querySelectorAll('b')];
+			expect(after).toHaveLength(bold.length);
+			after.forEach((node, index) => expect(node).toBe(bold[index]));
+			expect(errors).not.toHaveBeenCalled();
+		} finally {
+			errors.mockRestore();
+			root?.unmount();
+			owner.dispose();
+			container.remove();
+		}
+	});
+});
+
 describe('mixed live text, attributes, and form controls', () => {
 	it.each(
 		[false, true].flatMap((dev) =>
