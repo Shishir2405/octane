@@ -37,18 +37,16 @@ PR639=73b22fd1185db202f218e1a7e9e230571ef01c30
 pnpm --filter octane-tsrx-memowall-bench build >"$OUT/build-new-octane.log" 2>&1 || { tail -50 "$OUT/build-new-octane.log"; exit 1; }
 pnpm --filter react-compiler-memowall-bench build >"$OUT/build-new-react.log" 2>&1 || { tail -50 "$OUT/build-new-react.log"; exit 1; }
 old_tree $STACK octane-tsrx-memowall-bench
-old_tree $MAIN octane-tsrx-memowall-bench
-old_tree $PR639 octane-tsrx-memowall-bench
+# Each octane build is served twice so the same-build spread is measured too.
 serve benchmarks/memo-wall/octane-tsrx 5206
 serve benchmarks/memo-wall/react-compiler 5226
 serve /tmp/old-$STACK/benchmarks/memo-wall/octane-tsrx 6206
-serve /tmp/old-$MAIN/benchmarks/memo-wall/octane-tsrx 6207
-serve /tmp/old-$PR639/benchmarks/memo-wall/octane-tsrx 6208
+serve benchmarks/memo-wall/octane-tsrx 6216
+serve /tmp/old-$STACK/benchmarks/memo-wall/octane-tsrx 6217
 TARGETS='[
 	{"name":"octane-tsrx","url":"http://localhost:5206/"},
 	{"name":"react","url":"http://localhost:5226/"},
 	{"name":"octane-tsrx-stack","url":"http://localhost:6206/"},
-	{"name":"octane-tsrx-main","url":"http://localhost:6207/"},
-	{"name":"octane-tsrx-639","url":"http://localhost:6208/"}
+	{"name":"octane-tsrx-again","url":"http://localhost:6216/"},
+	{"name":"octane-tsrx-stack-again","url":"http://localhost:6217/"}
 ]' BENCH_JSON="$OUT/memo-wall-ab.json" node benchmarks/memo-wall/run.mjs "$ITER" || echo "memo-wall A/B exited $?"
-(cd benchmarks/memo-wall && BENCH_JSON="$OUT/memo-wall-survivor-work.json" node survivor-work.mjs) || echo "survivor-work exited $?"
