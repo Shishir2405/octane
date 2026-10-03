@@ -1337,6 +1337,7 @@ const SUITES = [
 		runs: [
 			{ script: 'retirement.mjs', args: () => [] },
 			{ script: 'inputs.mjs', args: () => [] },
+			{ script: 'reorders.mjs', args: () => [] },
 			{ script: 'contracts.mjs', args: () => [] },
 		],
 	},

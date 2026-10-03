@@ -4762,30 +4762,47 @@ function journalForSlot(state: ForSlot): void {
 			seen.delete(state);
 		});
 		journalRootRange(domNode(state.start).parentNode!, state.start, state.end);
+		// No chain is restored here, so rows keep their indices individually.
+		for (let b: Block | null = state.head; b !== null; b = b.nextSibling)
+			TRANSITION_JOURNAL!.push(JOURNAL_PROP, b, 'itemIndex', b.itemIndex);
 		return;
 	}
 	const chain: Block[] = [];
+	// Rollback restores each row's itemIndex from its chain position. A row whose
+	// index already differs from that position keeps its exact value here.
+	let indices: Map<Block, number> | null = null;
 	for (let b: Block | null = state.head; b !== null; b = b.nextSibling) {
+		if (b.itemIndex !== chain.length) (indices ??= new Map()).set(b, b.itemIndex);
 		chain.push(b);
 	}
 	// The key Map keeps insertion order through earlier reorders. Preserve that
 	// order for context refresh only when it differs from the linked DOM order.
-	let mapOrder: Block[] | null = null;
-	let index = 0;
-	for (const block of state.items.values()) {
-		if (mapOrder === null && chain[index] !== block) mapOrder = chain.slice(0, index);
-		mapOrder?.push(block);
-		index++;
-	}
-	if (mapOrder === null && index !== chain.length) mapOrder = chain.slice(0, index);
+	// Spreading the values takes the engine's bulk copy; a list reordered before
+	// differs at its first rows, so the comparison usually stops at once.
+	const keyOrder = [...state.items.values()];
+	let mapOrder: Block[] | null = keyOrder.length === chain.length ? null : keyOrder;
+	for (let i = 0; mapOrder === null && i < keyOrder.length; i++)
+		if (keyOrder[i] !== chain[i]) mapOrder = keyOrder;
 	const snapshot = {
 		empty: state.emptyBlock,
 		mapOrder,
+		indices,
 	};
 	journalUndo(() => {
 		restoreForSlot(state, snapshot, chain);
 		TRANSITION_JOURNAL_BAGS!.delete(state);
 	});
+}
+
+/**
+ * Before a survivor's first index write, record the list's shape instead of
+ * the index. An index moves only when membership or order does, which takes
+ * this snapshot anyway, and its chain restores every row's index on rollback.
+ * Returns false once the snapshot exists, which ends the reconcile's checks.
+ */
+function journalSurvivorIndex(state: ForSlot): false {
+	journalForSlot(state);
+	return false;
 }
 
 /**
@@ -4839,11 +4856,13 @@ function restoreForSlot(state: ForSlot, snapshot: any, chain: Block[] | null): v
 	if (preservedMap !== null) state.items = preservedMap;
 	else {
 		const originalChain = chain!;
+		const indices: Map<Block, number> | null = snapshot.indices;
 		state.items.clear();
 		for (let i = 0; i < originalChain.length; i++) {
 			const block = originalChain[i];
 			block.nextSibling = originalChain[i + 1] ?? null;
 			block.prevSibling = originalChain[i - 1] ?? null;
+			block.itemIndex = indices?.get(block) ?? i;
 		}
 		const keyOrder: Block[] = snapshot.mapOrder ?? originalChain;
 		for (let i = 0; i < keyOrder.length; i++) {
@@ -45577,9 +45596,9 @@ function updateSurvivor<T>(
 	// the body can't observe position (indexIndependent — the common index-less
 	// `@for`) or the position is also unchanged. This is what makes a pure reorder
 	// (shuffle / reverse / rotate) move survivors' DOM without re-rendering them.
+	// The list's shape snapshot restores itemIndex from chain order, and
+	// reconcileKeyed takes it before the first index write (journalSurvivorIndex).
 	const journal = ROOT_RENDER_TRANSACTION !== null && !ROOT_RENDER_ROLLBACK;
-	if (journal && block.itemIndex !== newIdx)
-		journalRootProperty(block, 'itemIndex', block.itemIndex);
 	if (journal && block.body !== itemBody) journalRootProperty(block, 'body', block.body);
 	if (pure && block.props === newItem && (indexIndependent || block.itemIndex === newIdx)) {
 		block.itemIndex = newIdx;
@@ -45970,8 +45989,10 @@ function reconcileKeyed<T>(
 			block.props !== newItem ||
 			block.body !== itemBody ||
 			block.itemIndex !== prefixLen
-		)
+		) {
+			if (journalShape && block.itemIndex !== prefixLen) journalShape = journalSurvivorIndex(state);
 			updateSurvivor(block, newItem, prefixLen, itemBody, pure, lite, indexIndependent, state.env);
+		}
 		oldFirst = block.nextSibling!;
 		prefixLen++;
 	}
@@ -45990,8 +46011,10 @@ function reconcileKeyed<T>(
 		if (observeKey !== undefined) observeKey(newEnd, newKey);
 		const block = oldLast;
 		// Same stable-survivor skip as the prefix walk (see above).
-		if (!pure || block.props !== newItem || block.body !== itemBody || block.itemIndex !== newEnd)
+		if (!pure || block.props !== newItem || block.body !== itemBody || block.itemIndex !== newEnd) {
+			if (journalShape && block.itemIndex !== newEnd) journalShape = journalSurvivorIndex(state);
 			updateSurvivor(block, newItem, newEnd, itemBody, pure, lite, indexIndependent, state.env);
+		}
 		oldLast = block.prevSibling!;
 		newEnd--;
 		oldRemain--;
@@ -46171,8 +46194,15 @@ function reconcileKeyed<T>(
 				const newIdx = prefixLen + newRelIdx;
 				const newItem = items[newIdx];
 				// Same stable-survivor skip as the prefix walk (see above).
-				if (!pure || cur!.props !== newItem || cur!.body !== itemBody || cur!.itemIndex !== newIdx)
+				if (
+					!pure ||
+					cur!.props !== newItem ||
+					cur!.body !== itemBody ||
+					cur!.itemIndex !== newIdx
+				) {
+					if (journalShape && cur!.itemIndex !== newIdx) journalShape = journalSurvivorIndex(state);
 					updateSurvivor(cur!, newItem, newIdx, itemBody, pure, lite, indexIndependent, state.env);
+				}
 			}
 			cur = next;
 			oldIdx++;
