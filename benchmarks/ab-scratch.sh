@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Scratch attribution (never merged): the Octane fixtures of js-framework-reorder,
-# memo-wall and svg-dashboard built at several commits, all served at once and
-# driven by this head's paired harness. Each commit builds with its own deps.
+# Scratch A/B (never merged): svg-dashboard's Octane fixture built at main and at
+# the read-once candidate, served at once beside React and driven by this
+# head's paired harness on one runner. Each commit builds with its own deps.
 set -euo pipefail
 ROOT=$PWD
 OUT=$ROOT/benchmarks/results
 mkdir -p "$OUT"
-ITER=${AB_ITER:-15}
+ITER=${AB_ITER:-20}
 
 wait_port() {
 	for _ in $(seq 1 240); do
@@ -32,49 +32,28 @@ tree() {
 	for f in "$@"; do (cd "/tmp/at-$sha" && pnpm --filter "$f" build) >"$OUT/build-$sha-$f.log" 2>&1 || { tail -50 "$OUT/build-$sha-$f.log"; return 1; }; done
 }
 
-JS=octane-tsrx-jsbench
-MW=octane-tsrx-memowall-bench
 SVG=octane-tsrx-svg-dashboard-bench
 
-# name sha
+# name sha: main and the read-once candidate (perf/scoped-value-repeat-reads).
 COMMITS=(
-	"p833 6927595656860f12fef79948135f5f1ee29595c2"
-	"main dc3e180236a5d55fb1288ef8738ace52870ef891"
-	"both d6591cb3143824660f1ac7f9631845dd20908bbd"
-	"bothS 778d7fddbcf6aea7824b05d63652a0e1b28a0937"
+	"main 950ef0b0bd80b87e8a2777b068dec65c6905eabb"
+	"cand 6e541598d4c016518731f3e18232081c8c43c3cf"
 )
-SVG_OLD=7a6fba3aef8a0bb1c9f5a01ca00bbcec0e4aa6f1
 
-pnpm --filter react-jsbench build >"$OUT/build-react-js.log" 2>&1
-pnpm --filter react-compiler-memowall-bench build >"$OUT/build-react-mw.log" 2>&1
 pnpm --filter react-svg-dashboard-bench build >"$OUT/build-react-svg.log" 2>&1
-serve benchmarks/js-framework/react 5175
-serve benchmarks/memo-wall/react-compiler 5226
 serve benchmarks/svg-dashboard/react 5303
-
-JS_T='{"name":"react","url":"http://localhost:5175/","ready":"#run"}'
-MW_T='{"name":"react","url":"http://localhost:5226/"}'
 SVG_T='{"name":"react","url":"http://localhost:5303/"}'
 
 i=0
 for entry in "${COMMITS[@]}"; do
 	read -r name sha <<<"$entry"
-	if [ "$name" = o639 ]; then
-		tree "$sha" $JS $MW
-	else
-		tree "$sha" $JS $MW $SVG
-	fi
-	serve "/tmp/at-$sha/benchmarks/js-framework/octane-tsrx" $((7000 + i))
-	JS_T="$JS_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7000 + i))/\",\"ready\":\"#run\"}"
-	serve "/tmp/at-$sha/benchmarks/memo-wall/octane-tsrx" $((7100 + i))
-	MW_T="$MW_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7100 + i))/\"}"
-	if [ "$name" != o639 ]; then
-		serve "/tmp/at-$sha/benchmarks/svg-dashboard/octane-tsrx" $((7200 + i))
-		SVG_T="$SVG_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7200 + i))/\"}"
-	fi
+	tree "$sha" $SVG
+	serve "/tmp/at-$sha/benchmarks/svg-dashboard/octane-tsrx" $((7200 + i))
+	SVG_T="$SVG_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7200 + i))/\"}"
 	i=$((i + 1))
 done
 
-TARGETS="[$JS_T]" BENCH_JSON="$OUT/js-framework-reorder-attrib.json" node benchmarks/js-framework/run-reorder.mjs "$ITER" || echo "reorder exited $?"
-TARGETS="[$MW_T]" BENCH_JSON="$OUT/memo-wall-attrib.json" node benchmarks/memo-wall/run.mjs "$ITER" || echo "memo-wall exited $?"
-TARGETS="[$SVG_T]" BENCH_JSON="$OUT/svg-dashboard-attrib.json" node benchmarks/svg-dashboard/run.mjs "$ITER" || echo "svg-dashboard exited $?"
+# Two independent paired passes; each rotates target order every round.
+for pass in 1 2; do
+	TARGETS="[$SVG_T]" BENCH_JSON="$OUT/svg-dashboard-ab-$pass.json" node benchmarks/svg-dashboard/run.mjs "$ITER" || echo "svg-dashboard pass $pass exited $?"
+done
