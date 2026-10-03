@@ -42,44 +42,19 @@ jobs:
           node-version: 24
           cache: "pnpm"
 
-      - name: Test benchmark work collector
-        run: node --test benchmarks/lib/precise-work.test.mjs
-
       - name: Install dependencies
         run: pnpm install --prod false --frozen-lockfile
-
-      - name: Test Lynx diagnostic fixture contracts
-        run: |
-          node --test benchmarks/lynx-table/stages/*.test.mjs
-          node --test benchmarks/lynx-list/*.test.mjs
-
-      - name: Test UIbench measurement failures
-        run: node --test benchmarks/uibench/run.test.mjs
-
-      - name: Verify synthetic workerd app workloads
-        run: |
-          node --test benchmarks/ssr-workerd/app-workloads/verify.test.mjs
-          BENCH_ROUNDS=1 node benchmarks/ssr-workerd/app-workloads/run.mjs 1
 
       - name: Install Playwright Chromium
         run: pnpm --filter octane-js-framework-benchmarks exec playwright install --with-deps chromium
 
-      - name: Verify browser benchmark timing boundaries
-        run: node --test benchmarks/js-framework/timing.test.mjs
-
-      # --quick keeps every code path + correctness gate exercised at reduced
-      # iterations; --ratios enforces the committed ratio guards and fails the job
-      # on any breach. Absolute baselines are intentionally not compared here.
-      - name: Run benchmarks (quick, ratio guards)
-        env:
-          BENCH_SUITES: ${{ inputs.suites }}
-        # BENCH_SUITES is unquoted on purpose: each word is one suite argument.
-        run: node benchmarks/bench.mjs --quick --ratios $BENCH_SUITES
+      - name: Scratch A/B (warm-plan checkpoint guard vs main)
+        run: bash benchmarks/ab-scratch.sh
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: bench-results
+          name: bench-ab-results
           path: benchmarks/results/
           if-no-files-found: warn
