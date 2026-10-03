@@ -4532,6 +4532,7 @@ function cloneBindingBag(bag: any, arity: number): object {
 }
 
 function journalBag(): void {
+	if (ROOT_RENDER_TRANSACTION !== null && TRANSITION_JOURNAL_DEPTH === 1) return;
 	const scope = CURRENT_SCOPE;
 	if (scope === null) return;
 	const transaction = ROOT_RENDER_TRANSACTION;
@@ -5014,12 +5015,14 @@ function collectBlockRange(block: Block): Node[] {
 }
 
 function journalText(node: Text, previous: string | null): void {
+	if (ROOT_RENDER_TRANSACTION !== null && TRANSITION_JOURNAL_DEPTH === 1) return;
 	TRANSITION_JOURNAL!.push(JOURNAL_TEXT, node, previous, null);
 	journalBag();
 }
 
 /** A namespaced attribute (`xlink:href`) journals its name as `[namespace, name]`. */
 function journalAttr(el: Element, name: string, ns?: string | null): void {
+	if (ROOT_RENDER_TRANSACTION !== null && TRANSITION_JOURNAL_DEPTH === 1) return;
 	TRANSITION_JOURNAL!.push(
 		JOURNAL_ATTR,
 		el,
