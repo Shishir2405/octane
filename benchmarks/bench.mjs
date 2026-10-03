@@ -302,7 +302,10 @@ const SUITES = [
 		cwd: 'scoped-signals',
 		servers: [],
 		iter: { normal: 9, quick: 3 },
-		runs: [{ script: 'run-dom-bindings.mjs', args: (_n, quick) => (quick ? ['--quick'] : []) }],
+		runs: [
+			{ script: 'run-dom-bindings.mjs', args: (_n, quick) => (quick ? ['--quick'] : []) },
+			{ label: 'event-owners', script: 'event-owners.mjs', args: () => [] },
+		],
 	},
 	{
 		name: 'signal-favoring',
@@ -638,7 +641,11 @@ const SUITES = [
 			{ filter: 'svelte-memowall-bench', port: 5278 },
 		],
 		iter: { normal: 20, quick: 3 },
-		runs: [{ script: 'run.mjs', args: (n) => [String(n)] }],
+		runs: [
+			{ script: 'run.mjs', args: (n) => [String(n)] },
+			{ label: 'bail-compare', script: 'bail-compare.mjs', args: () => [] },
+			{ label: 'survivor-work', script: 'survivor-work.mjs', args: () => [] },
+		],
 	},
 	{
 		name: 'portal-swarm',
@@ -1345,6 +1352,7 @@ const SUITES = [
 		runs: [
 			{ script: 'retirement.mjs', args: () => [] },
 			{ script: 'inputs.mjs', args: () => [] },
+			{ script: 'reorders.mjs', args: () => [] },
 			{ script: 'contracts.mjs', args: () => [] },
 		],
 	},

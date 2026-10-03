@@ -380,6 +380,12 @@ export interface Scope {
 	block: Block;
 	parent: Scope | null;
 	/**
+	 * An event handler published this scope as its signal authority. Deletion then
+	 * records retirement for a scope that never resolved an owner, so a handler
+	 * queued past the deletion cannot mint fresh instance state for it.
+	 */
+	signalTokenEscaped: boolean;
+	/**
 	 * Hook slot map. Lazily allocated on the first hook call via `ensureHooks`.
 	 * For-of item bodies that never call a hook (the common case in
 	 * js-framework-benchmark-shaped lists) keep this as `null` for their
@@ -2070,14 +2076,6 @@ export interface Block extends Scope {
 	memoInChain: boolean;
 	pending: boolean;
 	disposed: boolean;
-	/**
-	 * Event-route epoch at which this Block's hosts left delegated dispatch; 0 while
-	 * they are live. Teardown disposes a Block before detaching its DOM, and
-	 * detaching a focused host dispatches focusout synchronously, so disposal
-	 * stamps it first; a staged deletion stamps it when it publishes.
-	 * snapshotDelegatedSlots skips hosts retired before a delivery began.
-	 */
-	retired: number;
 	/**
 	 * RENDER_VALID / RENDER_INVALID / RENDER_RETRYING, separate from mount lifetime.
 	 * Kept numeric because nested renders can invalidate an active retry in place.
@@ -4054,6 +4052,8 @@ function deferRootRange(
 	});
 	(ROOT_RENDER_TRANSACTION!.commit ??= []).push(() => {
 		if (cancelled) return;
+		// Retire the outgoing nodes before any cleanup can move focus off them.
+		nodes.forEach(retireEventHostTree);
 		cleanup?.();
 		for (const node of nodes)
 			if ((STAGED_DOM?.view(node) ?? node).parentNode === parent)
@@ -4183,13 +4183,8 @@ function rollbackRootRender(transaction: RootRenderTransaction): void {
 					undoCreatedInRootRender(transaction.log[i + 1], transaction.log[i + 2]);
 				else if (transaction.log[i] === JOURNAL_RETIRED)
 					transaction.log[i + 1].delete(transaction.log[i + 2]);
-				else if (transaction.log[i] === JOURNAL_EVENT_OWNER) {
-					const owners = transaction.log[i + 1];
-					const el = transaction.log[i + 2];
-					const previous = transaction.log[i + 3];
-					if (previous === undefined) owners.delete(el);
-					else owners.set(el, previous);
-				}
+				else if (transaction.log[i] === JOURNAL_EVENT_OWNER)
+					transaction.log[i + 1].$$signalOwner = transaction.log[i + 2];
 			}
 			transaction.log.length = 0;
 		}
@@ -4746,9 +4741,9 @@ function forSlotParkable(state: ForSlot): boolean {
  * window — the first record is the pre-render one, which is the one to go back
  * to.
  */
-function journalForSlot(state: ForSlot): void {
+function journalForSlot(state: ForSlot): false {
 	const seen = TRANSITION_JOURNAL_BAGS!;
-	if ((seen.get(state) ?? -1) >= TRANSITION_JOURNAL_CHECKPOINT) return;
+	if ((seen.get(state) ?? -1) >= TRANSITION_JOURNAL_CHECKPOINT) return false;
 	seen.set(state, TRANSITION_JOURNAL!.length);
 	if (
 		ROOT_RENDER_TRANSACTION !== null &&
@@ -4762,22 +4757,27 @@ function journalForSlot(state: ForSlot): void {
 			seen.delete(state);
 		});
 		journalRootRange(domNode(state.start).parentNode!, state.start, state.end);
-		return;
+		// No chain record restores indices here, so rows that already exist keep
+		// theirs individually before reconcileKeyed moves them.
+		for (let b: Block | null = state.head; b !== null; b = b.nextSibling)
+			TRANSITION_JOURNAL!.push(JOURNAL_PROP, b, 'itemIndex', b.itemIndex);
+		return false;
 	}
+	// Rollback also restores each row's itemIndex from its chain position: every
+	// reconcile leaves a row's index equal to its position, and reconcileKeyed
+	// records the shape before it writes the first survivor index.
 	const chain: Block[] = [];
 	for (let b: Block | null = state.head; b !== null; b = b.nextSibling) {
 		chain.push(b);
 	}
 	// The key Map keeps insertion order through earlier reorders. Preserve that
 	// order for context refresh only when it differs from the linked DOM order.
-	let mapOrder: Block[] | null = null;
-	let index = 0;
-	for (const block of state.items.values()) {
-		if (mapOrder === null && chain[index] !== block) mapOrder = chain.slice(0, index);
-		mapOrder?.push(block);
-		index++;
-	}
-	if (mapOrder === null && index !== chain.length) mapOrder = chain.slice(0, index);
+	// Spreading the values takes the engine's bulk copy; a list reordered before
+	// differs at its first rows, so the comparison usually stops at once.
+	const keyOrder = [...state.items.values()];
+	let mapOrder: Block[] | null = keyOrder.length === chain.length ? null : keyOrder;
+	for (let i = 0; mapOrder === null && i < keyOrder.length; i++)
+		if (keyOrder[i] !== chain[i]) mapOrder = keyOrder;
 	const snapshot = {
 		empty: state.emptyBlock,
 		mapOrder,
@@ -4786,6 +4786,7 @@ function journalForSlot(state: ForSlot): void {
 		restoreForSlot(state, snapshot, chain);
 		TRANSITION_JOURNAL_BAGS!.delete(state);
 	});
+	return false;
 }
 
 /**
@@ -4844,6 +4845,7 @@ function restoreForSlot(state: ForSlot, snapshot: any, chain: Block[] | null): v
 			const block = originalChain[i];
 			block.nextSibling = originalChain[i + 1] ?? null;
 			block.prevSibling = originalChain[i - 1] ?? null;
+			block.itemIndex = i;
 		}
 		const keyOrder: Block[] = snapshot.mapOrder ?? originalChain;
 		for (let i = 0; i < keyOrder.length; i++) {
@@ -5019,6 +5021,10 @@ function flushParkedItems(): void {
 
 /** Committed root deletions clean up against connected DOM before removing the range. */
 function unmountParkedItem(item: ParkedItem): void {
+	// Retire the row before any cleanup can move focus off it. Without focus in a
+	// drain, neither its removal nor a cleanup can blur it: an unfocused bulk
+	// removal stays free of per-row work.
+	if (renderingFocus !== null || !inFlush) for (const node of item.nodes) retireEventHostTree(node);
 	try {
 		unmountBlock(item.block, false);
 	} finally {
@@ -5079,8 +5085,7 @@ function rollbackTransitionJournal(checkpoint: number, owner: Block): void {
 					target();
 					break;
 				case JOURNAL_EVENT_OWNER:
-					if (b === undefined) target.delete(a);
-					else target.set(a, b);
+					target.$$signalOwner = a;
 					break;
 				default:
 					// Spread snapshots include enumerable symbols as well as strings.
@@ -8960,7 +8965,6 @@ interface DeferredLayoutDriver {
 	holdsPendingQueue(): boolean;
 	stageEffects(): boolean;
 	stageAction(action: () => void, durable?: boolean): boolean;
-	retireHosts(block: Block): void;
 	retireHostTree(node: Node): void;
 	stageTeardown(cleanup: Cleanup, phase: number, scope: Scope): boolean;
 	stageDeactivation(slot: EffectSlot, scope: Scope): boolean;
@@ -9014,7 +9018,6 @@ interface StagedCommitCapture {
 	bundles: Map<HandlerBundle, HandlerBundle>;
 	controls: Map<ControlledState, ControlledState>;
 	signalHosts?: Map<SignalHostPropSourcesBinding, SignalHostPropSourcesBinding>;
-	retiredBlocks?: Block[];
 	retiredHostTrees?: Node[];
 	owners: Map<
 		RootRenderOwner,
@@ -9367,32 +9370,16 @@ function ensureDeferredLayoutDriver(): void {
 				enqueueStagedAction(capture, action, durable);
 				return true;
 			},
-			retireHosts(block) {
-				// A staged deletion keeps its committed hosts live until it publishes.
-				// One queued action per capture retires them all, ahead of every DOM
-				// removal the capture queued after its first retirement.
-				const capture = STAGED_COMMIT_CAPTURE!;
-				let blocks = capture.retiredBlocks;
-				if (blocks === undefined) {
-					const list: Block[] = (blocks = capture.retiredBlocks = []);
-					capture.enqueue(() => {
-						const epoch = ++eventRootEpoch;
-						for (let i = 0; i < list.length; i++) list[i].retired = epoch;
-					}, true);
-				}
-				blocks.push(block);
-			},
 			retireHostTree(node) {
-				// Like retireHosts: one queued action per capture stamps every
-				// removed host root ahead of the DOM removals queued after it.
+				// A staged deletion keeps its committed hosts live until it publishes.
+				// One queued action per capture stamps every removed host root, ahead
+				// of the cleanups and DOM removals the capture queued after it. It
+				// runs after the capture ends, so each node stamps immediately.
 				const capture = STAGED_COMMIT_CAPTURE!;
 				let nodes = capture.retiredHostTrees;
 				if (nodes === undefined) {
 					const list: Node[] = (nodes = capture.retiredHostTrees = []);
-					capture.enqueue(() => {
-						const epoch = ++eventRootEpoch;
-						for (let i = 0; i < list.length; i++) stampRetiredHostTree(list[i], epoch);
-					}, true);
+					capture.enqueue(() => list.forEach(retireEventHostTree), true);
 				}
 				nodes.push(node);
 			},
@@ -10547,7 +10534,6 @@ class BlockImpl {
 	// Scheduler / lifecycle.
 	declare pending: boolean;
 	declare disposed: boolean;
-	declare retired: number;
 	declare mounted: boolean;
 	declare renderStatus: number;
 	declare pendingMode: 'urgent' | 'transition' | null;
@@ -10567,6 +10553,7 @@ class BlockImpl {
 	declare signalInstanceValue: unknown;
 	declare signalInstanceHasKey: boolean;
 	declare signalInstanceResolved: string | undefined;
+	declare signalTokenEscaped: boolean;
 	declare $$ctxValues: Map<Context<any>, any> | null;
 	// Contexts whose value this block's subtree consumes — stamped on this block
 	// AND its memo ancestors by useContextInternal. The TRANSITIVE signal: a
@@ -10664,7 +10651,6 @@ class BlockImpl {
 		this.itemIndex = 0;
 		this.pending = false;
 		this.disposed = false;
-		this.retired = 0;
 		this.mounted = false;
 		this.renderStatus = RENDER_VALID;
 		this.pendingMode = null;
@@ -10722,6 +10708,7 @@ class BlockImpl {
 		this.signalInstanceValue = undefined;
 		this.signalInstanceHasKey = false;
 		this.signalInstanceResolved = undefined;
+		this.signalTokenEscaped = false;
 	}
 }
 
@@ -10759,6 +10746,7 @@ class ScopeImpl {
 	declare signalInstanceValue: unknown;
 	declare signalInstanceHasKey: boolean;
 	declare signalInstanceResolved: string | undefined;
+	declare signalTokenEscaped: boolean;
 
 	constructor(parent: Scope, block: Block) {
 		this.block = block;
@@ -10781,6 +10769,7 @@ class ScopeImpl {
 		this.signalInstanceValue = undefined;
 		this.signalInstanceHasKey = false;
 		this.signalInstanceResolved = undefined;
+		this.signalTokenEscaped = false;
 	}
 }
 
@@ -11793,8 +11782,8 @@ export function componentSlotLite<P>(
 				// it, on a root before that node. A templateless body anchors at its
 				// block's end marker instead, with the cursor on the call's server
 				// node, and a walk that ran off the end of its host found no node.
-				hydration.node = anchor;
-				inPlace = anchor;
+				// The body inserts before the node after the server node (parkAtHole).
+				endMarker = hydration.parkAtHole((inPlace = anchor));
 			}
 		}
 		scope.block = new LiteBlockImpl(host, endMarker, parentScope.block) as unknown as Block;
@@ -11966,10 +11955,9 @@ function renderUnframedLite<P>(
 // separate function keeps the callback's captures out of ordinary lite dispatch.
 // When `root` is the element or text a template hole's walk found (the call's
 // anchor), the template claims the server nodes after it, and only a body of
-// one root can take its place: the body's end marker is `root`, which the first
-// of several roots replaces. Any other body renders unframed in place of `root`
-// alone (renderUnframed), as componentSlot renders a call it cannot prove
-// single-root.
+// one root can take its place. Any other body renders unframed in place of
+// `root` alone (renderUnframed), as componentSlot renders a call it cannot
+// prove single-root.
 function renderLiteInPlace<P>(
 	hydration: HydrationCapability,
 	parentScope: Scope,
@@ -12084,10 +12072,6 @@ function unmountBlock(block: Block, detachDom: boolean = true): void {
 
 function unmountBlockInner(block: Block, detachDom: boolean): void {
 	block.disposed = true;
-	// Its hosts leave delegated dispatch before its DOM does (see `retired`). Inline:
-	// an extra call per deleted Block is measurable in bulk teardown.
-	if (STAGED_COMMIT_CAPTURE) DEFERRED_LAYOUT_DRIVER!.retireHosts(block);
-	else block.retired = ++eventRootEpoch;
 	if (
 		typeof __OCTANE_PROFILE_ENABLED__ !== 'undefined' &&
 		__OCTANE_PROFILE_ENABLED__ &&
@@ -12302,7 +12286,10 @@ function runScopeCleanups(scope: Scope, retireUnowned: boolean): void {
 		if (retireUnowned) SCOPE_SIGNAL_OWNERS.set(scope, null);
 		else SCOPE_SIGNAL_OWNERS.delete(scope);
 		retireRendererSignalOwner(signalOwner);
-	} else if (retireUnowned && signalOwner === false) {
+	} else if (
+		retireUnowned &&
+		(signalOwner === false || (signalOwner === undefined && scope.signalTokenEscaped))
+	) {
 		if (
 			STAGED_COMMIT_CAPTURE !== null &&
 			DEFERRED_LAYOUT_DRIVER!.stageAction(() => retireUnownedSignalScope(scope), true)
@@ -12316,7 +12303,8 @@ function retireUnownedSignalScope(scope: Scope): void {
 	// Resolve at publication, after deferred cleanups which may read the first
 	// handle. Null records retirement without allocating speculative authority.
 	const owner = SCOPE_SIGNAL_OWNERS.get(scope);
-	if (owner === false) SCOPE_SIGNAL_OWNERS.set(scope, null);
+	if (owner === false || (owner === undefined && scope.signalTokenEscaped))
+		SCOPE_SIGNAL_OWNERS.set(scope, null);
 	else if (owner) {
 		SCOPE_SIGNAL_OWNERS.set(scope, null);
 		retireRendererSignalOwner(owner);
@@ -18118,9 +18106,11 @@ export function nativePuPub(
 // Unlike parallel-use's value sentinel, a nullable ENTRY handles every authored
 // memo value, including undefined, null, and puMiss itself. Dependency hits do
 // not construct a callback or dependency array.
-export function memoSlot(slot: HookSlot | undefined, name: 'useMemo' | 'useCallback'): HookSlot {
+// The compiler passes the hook's name only with an authored slot, which a manual
+// hook may leave undefined; a slot it appended always resolves.
+export function memoSlot(slot: HookSlot | undefined, name?: 'useMemo' | 'useCallback'): HookSlot {
 	const resolved = resolveSlot(slot);
-	if (resolved === undefined) missingSlot(name);
+	if (resolved === undefined) missingSlot(name!);
 	return resolved;
 }
 
@@ -19591,7 +19581,9 @@ class HydrationCapability {
 	 * after the last root, so step past it. A body that rebuilt `root` or
 	 * rendered nothing there leaves the cursor where it put it. When `unframed`,
 	 * a template that does not match leaves `root` and the nodes after it to
-	 * renderUnframed. Returns whether the body adopted `root`.
+	 * renderUnframed. Returns whether the body adopted `root`. A call in the body
+	 * that renders in place of the same `root`, before any template adopted it,
+	 * adopts it for the enclosing call too: its root is the enclosing call's.
 	 */
 	renderInPlace<T>(render: (target: T) => void, target: T, root: Node, unframed = false): boolean {
 		const outer = this.inPlace;
@@ -19616,7 +19608,28 @@ class HydrationCapability {
 		}
 		if (end === undefined) return false;
 		this.node = end;
+		if (outer === root) {
+			this.inPlace = null;
+			this.inPlaceEnd = end;
+		}
 		return true;
+	}
+
+	/**
+	 * Park the cursor on `node`, the server node that a template hole's walk
+	 * found for a single-root call without a range of its own, and return
+	 * where the call inserts: before the node after `node`. On the client the
+	 * hole's own placeholder anchors the call, but the server rendered none,
+	 * and the call's root takes `node`'s place. `node` itself cannot anchor
+	 * the call: the root is `node` when the body adopts it and replaces it when
+	 * mismatch recovery rebuilds it, so a branch or other slot that the body
+	 * anchors at its block's end would bound its content before that content,
+	 * or against a removed node. At a closing marker the server rendered
+	 * nothing for the hole, and the call inserts before it.
+	 */
+	parkAtHole(node: Node): Node | null {
+		this.node = node;
+		return isBlockClose(node) ? node : getNextSibling(node);
 	}
 
 	/**
@@ -19811,12 +19824,66 @@ class HydrationCapability {
 		return found;
 	}
 
+	/**
+	 * Adopt the text of a binding-view text hole whose server range `posNode`
+	 * opens: the range's one text node, or a new one when the server rendered it
+	 * empty. Any other range content does not match the template. Null when
+	 * `posNode` opens no range, so bindingText builds one.
+	 */
+	adoptBindingText(posNode: Node | null, text: string): Text | null {
+		if (!isBlockOpen(posNode)) return null;
+		const close = this.close(posNode);
+		const existing = getNextSibling(posNode);
+		if (existing !== close && existing?.nodeType === 3 && getNextSibling(existing) === close) {
+			if ((STAGED_DOM?.view(existing) ?? existing).nodeValue !== text)
+				(STAGED_DOM?.view(existing) ?? existing).nodeValue = text;
+			return existing as Text;
+		}
+		if (existing !== close) throw new TypeError(formatClientError(72));
+		const node = (STAGED_DOM?.view(document) ?? document).createTextNode(text);
+		domNode((STAGED_DOM?.view(close) ?? close).parentNode)!.insertBefore(node, close);
+		return node;
+	}
+
 	resolveOpen(anchor: Node | null | undefined, domParent: Node): Comment | null {
 		if (isBlockOpen(anchor ?? null)) return anchor as Comment;
 		let cursor = this.node;
 		if (cursor === null || (STAGED_DOM?.view(cursor) ?? cursor).parentNode !== domParent)
 			cursor = getFirstChild(domParent);
 		return cursor !== null && isBlockOpen(cursor) ? (cursor as Comment) : null;
+	}
+
+	/**
+	 * The open marker of the server range that an `@if`/`@switch` slot adopts
+	 * on its first render at `anchor`, as resolveOpen finds it. The server frames
+	 * every such slot, so an element or text there, other than the end marker
+	 * of `scope`'s block, is where its template hole's walk found another arm's
+	 * markup, as an enclosing `@if` renders it when the server took another arm.
+	 * The walk counts one server node for the hole and gives the nodes after it
+	 * to the template's later roots, so that node is all the slot may claim.
+	 * Frame it in the slot's and an arm's range, as the server would have: the
+	 * branch then adopts it, rebuilds over it or discards it, and claims nothing
+	 * after it, as for any server range.
+	 */
+	branchOpen(anchor: Node | null, domParent: Node, scope: Scope): Comment | null {
+		if (
+			anchor === null ||
+			anchor.nodeType === 8 ||
+			anchor === scope.block.endMarker ||
+			domNode(anchor).parentNode !== domParent ||
+			this.freshNodes.has(anchor)
+		)
+			return this.resolveOpen(anchor, domParent);
+		const doc = STAGED_DOM?.view(document) ?? document;
+		const parent = domNode(domParent);
+		const next = getNextSibling(anchor);
+		const open = doc.createComment(HYDRATION_START);
+		this.save(domParent);
+		parent.insertBefore(open, anchor);
+		parent.insertBefore(doc.createComment(HYDRATION_START), anchor);
+		parent.insertBefore(doc.createComment(HYDRATION_END), next);
+		parent.insertBefore(doc.createComment(HYDRATION_END), next);
+		return open;
 	}
 
 	markerState(node: Node): -1 | 0 | 1 {
@@ -21354,36 +21421,70 @@ class HydrationCapability {
 					(STAGED_DOM?.view(first as Text) ?? (first as Text)).nodeValue = text;
 				}
 			}
-			if (getNextSibling(first) !== null) {
-				this.save(el);
-				noteRecoverableHydrationError(() => new Error(formatClientError(62)), this.rootBlock);
-				if (process.env.NODE_ENV !== 'production') {
-					warnHydrationStructuralMismatch(
-						loc || (el as any).__oct_loc,
-						'the end of the text element',
-						describeHydrationNode(getNextSibling(first)),
-					);
-				}
-				while (getNextSibling(first) !== null)
-					(STAGED_DOM?.view(el) ?? el).removeChild(getNextSibling(first)!);
-			}
+			const next = getNextSibling(first);
+			if (next !== null) this.discardUnclaimedText(el, next, null, loc);
 			return first as Text;
 		}
 		// A sole primitive can be framed by the server (e.g. a spread or ternary
-		// child). Unwrap only an exact text-only frame, then use the same adoption,
-		// mismatch and suppression behavior as bare text, without child-slot state.
+		// child). Unwrap only an exact text-only or empty frame, then use the same
+		// adoption, mismatch and suppression behavior as bare text, without
+		// child-slot state.
 		if (this.isOpen(first)) {
 			const child = getNextSibling(first);
-			const end = (STAGED_DOM?.view(child) ?? child)?.nextSibling ?? null;
-			if (child?.nodeType === 3 && this.isClose(end) && getNextSibling(end) === null) {
+			const end = child?.nodeType === 3 ? getNextSibling(child) : child;
+			if (this.isClose(end) && getNextSibling(end) === null) {
 				(STAGED_DOM?.view(first) ?? first).remove();
 				(STAGED_DOM?.view(end) ?? end).remove();
 				return this.htext(el, text, loc);
 			}
 		}
+		// Anything else the server rendered here is content the text cannot adopt.
+		if (first !== null) this.discardUnclaimedText(el, first, text, loc);
 		const created = (STAGED_DOM?.view(document) ?? document).createTextNode(text);
 		(STAGED_DOM?.view(el) ?? el).appendChild(created);
 		return created;
+	}
+
+	/**
+	 * Remove the server content in `el`, an only-child text host, from `from` to
+	 * its end. The hole adopts at most one leading Text node there, so anything
+	 * else is server content the client renders nothing for, and later updates
+	 * would land beside it. Reports the recovery where the client expected
+	 * `text` (nothing when it is '', or, when null, the end of the Text node it
+	 * adopted). suppressHydrationWarning silences the report but still discards:
+	 * the server content is not a text value to keep.
+	 */
+	private discardUnclaimedText(
+		el: Node,
+		from: ChildNode,
+		text: string | null,
+		loc: string | undefined,
+	): void {
+		if (PRESENTATION_HYDRATION?.revision !== undefined) presentationMiss();
+		this.save(el);
+		// Captures that changed before a dormant boundary activated legitimately
+		// differ from the server's; still recover, but there is nothing to report.
+		if (!this.staleServerValues && !isHydrationSuppressed(el)) {
+			noteRecoverableHydrationError(() => new Error(formatClientError(62)), this.rootBlock);
+			if (process.env.NODE_ENV !== 'production') {
+				// Name a server range by the content it frames.
+				const inner = this.isOpen(from) ? getNextSibling(from) : null;
+				warnHydrationStructuralMismatch(
+					loc || (el as any).__oct_loc,
+					text === null
+						? 'the end of the text element'
+						: text === ''
+							? 'nothing'
+							: `text ${JSON.stringify(text)}`,
+					describeHydrationNode(inner ?? from),
+				);
+			}
+		}
+		for (let node: ChildNode | null = from; node !== null;) {
+			const next = getNextSibling(node);
+			(STAGED_DOM?.view(el) ?? el).removeChild(node);
+			node = next;
+		}
 	}
 
 	/**
@@ -21474,28 +21575,12 @@ class HydrationCapability {
 		const first = getFirstChild(el);
 		if (first === null || (el as Element).localName === 'textarea') return;
 		const next = getNextSibling(first);
-		const framed = this.isOpen(first);
-		if (framed && this.isClose(next) && getNextSibling(next) === null) {
+		if (this.isOpen(first) && this.isClose(next) && getNextSibling(next) === null) {
 			(STAGED_DOM?.view(first) ?? first).remove();
 			(STAGED_DOM?.view(next) ?? next).remove();
 			return;
 		}
-		if (PRESENTATION_HYDRATION?.revision !== undefined) presentationMiss();
-		this.save(el);
-		// Captures that changed before a dormant boundary activated legitimately
-		// differ from the server's; still recover, but there is nothing to report.
-		if (!this.staleServerValues) {
-			noteRecoverableHydrationError(() => new Error(formatClientError(62)), this.rootBlock);
-			if (process.env.NODE_ENV !== 'production') {
-				warnHydrationStructuralMismatch(
-					loc || (el as any).__oct_loc,
-					'nothing',
-					describeHydrationNode(framed && next !== null ? next : first),
-				);
-			}
-		}
-		for (let n = getFirstChild(el); n !== null; n = getFirstChild(el))
-			(STAGED_DOM?.view(el) ?? el).removeChild(n);
+		this.discardUnclaimedText(el, first, '', loc);
 	}
 
 	htextSwap(posNode: Node | null, text: string): Text {
@@ -22127,19 +22212,10 @@ export function bindingText(posNode: Node | null, value: unknown, marker: string
 		});
 		return existing as Text;
 	}
-	if (hydration !== null && isBlockOpen(posNode)) {
-		const close = hydration.close(posNode);
-		const existing = getNextSibling(posNode);
-		if (existing !== close && existing?.nodeType === 3 && getNextSibling(existing) === close) {
-			if ((STAGED_DOM?.view(existing) ?? existing).nodeValue !== text)
-				(STAGED_DOM?.view(existing) ?? existing).nodeValue = text;
-			return existing as Text;
-		}
-		if (existing !== close) throw new TypeError(formatClientError(72));
-		const node = (STAGED_DOM?.view(document) ?? document).createTextNode(text);
-		domNode((STAGED_DOM?.view(close) ?? close).parentNode)!.insertBefore(node, close);
-		return node;
-	}
+	// Only hydrateRoot constructs the capability, so client-only bundles drop the
+	// range-marker validator that adoption needs.
+	const adopted = hydration?.adoptBindingText(posNode, text);
+	if (adopted) return adopted;
 	const parent = domNode(posNode)!.parentNode!;
 	const close = (STAGED_DOM?.view(document) ?? document).createComment(HYDRATION_END);
 	(STAGED_DOM?.view(posNode as Comment) ?? (posNode as Comment)).data = marker;
@@ -22916,8 +22992,10 @@ export function presentationWrite<T>(
 	if (kind === 'setEventHandler') {
 		preparePresentationOperation(frame, prepared[0], 'event:' + prepared[1], () => {
 			writer(...prepared);
-			if (SIGNAL_BINDINGS_ENABLED || signalDocumentEnabled)
-				(SIGNAL_EVENT_OWNERS ??= new WeakMap()).set(prepared[0], frame.scope as ScopeImpl);
+			if (SIGNAL_BINDINGS_ENABLED || signalDocumentEnabled) {
+				SIGNAL_EVENT_OWNERS_RECORDED = true;
+				prepared[0].$$signalOwner = frame.scope as ScopeImpl;
+			}
 		});
 		return undefined as T;
 	}
@@ -23875,13 +23953,14 @@ export function bindSignalText(
 	// signal token must still re-enter the read path even when its handle is
 	// unchanged, so pending/error recovery is not hidden by this scalar guard.
 	// A supplied previousValue may itself be undefined, so count arguments.
-	if (
-		previous instanceof Text &&
-		arguments.length > 6 &&
-		previousValue === value &&
-		!isSignalHandle(value)
-	)
+	if (previous instanceof Text && !isSignalHandle(value)) {
+		if (arguments.length > 6 && previousValue === value) return previous;
+		// A scalar over the Text this hole already owns is bindDirectSignal's
+		// unbound scalar write without its policy dispatch. setText journals the
+		// text and this binding bag.
+		setText(previous, value);
 		return previous;
+	}
 	if (previous === undefined && bindingMarker !== undefined) {
 		const existing = activeHydration() !== null ? getNextSibling(position) : null;
 		previous = bindingText(
@@ -27671,38 +27750,48 @@ function isUsableEventSlot(slot: EventSlot): boolean {
 // a direct guard avoids an idle projection call or an ordinary self-assignment.
 // A live scope token already captures unchanged authority. Explicit/environment
 // and document owners still refresh it; staged updates must publish in order
-// even when the committed map matches, because an earlier owner write may be pending.
+// even when the committed owner matches, because an earlier owner write may be pending.
 // ---------------------------------------------------------------------------
 
 // Data equality skips dispatch/journal snapshots, never authority publication:
 // a stable callback can move to another owner without changing its captures.
 // Compare staged fields first and keep array-reference semantics for arity N.
 const EMPTY_ARGS: any[] = [];
-let SIGNAL_EVENT_OWNERS: WeakMap<Element, SignalOwner | ScopeImpl | BlockImpl> | null = null;
+type SignalEventOwner = SignalOwner | ScopeImpl | BlockImpl;
+// Event authority lives on the host beside its handler slots, so publishing it
+// for each mounted row is a property write rather than a weak-map insertion.
+// The flag keeps documents that never record authority off the dispatch read.
+let SIGNAL_EVENT_OWNERS_RECORDED = false;
 
 // Epoch of this task's first removed host root (retireEventHostTree); 0 when none
 // is pending. Older stamps belong to nodes already detached and are ignored.
 let retiringHostsSince = 0;
 
 /**
- * Take a removed subtree out of delegated dispatch when no disposing Block covers
- * it: a pure host in a value hole belongs to the live Block that rendered it.
- * Every such removal detaches the node right after this, within the same task,
- * so only the root is stamped and the stamp only needs to outlive the task.
+ * Take a subtree that a committed deletion is about to detach out of delegated
+ * dispatch. Detaching a focused host dispatches focusout synchronously, and so
+ * does a deletion cleanup that moves focus, so a deletion stamps the top-level
+ * nodes it detaches before any of its cleanups run: a host below a stamp starts
+ * no handler, whichever component owns it. Every stamped node is detached
+ * within the same task, so the stamp only needs to outlive the task.
  */
 function retireEventHostTree(node: Node): void {
-	if (STAGED_COMMIT_CAPTURE) DEFERRED_LAYOUT_DRIVER!.retireHostTree(node);
-	else stampRetiredHostTree(node, ++eventRootEpoch);
-}
-
-function stampRetiredHostTree(node: Node, epoch: number): void {
+	if (STAGED_COMMIT_CAPTURE) return DEFERRED_LAYOUT_DRIVER!.retireHostTree(node);
+	(node as any).$$retiredEpoch = ++eventRootEpoch;
 	if (retiringHostsSince === 0) {
-		retiringHostsSince = epoch;
+		retiringHostsSince = eventRootEpoch;
 		queueMicrotask(() => {
 			retiringHostsSince = 0;
 		});
 	}
-	(node as any).$$retiredEpoch = epoch;
+}
+
+/** Retire `node` and its following siblings through `last` (all of them when null). */
+function retireHostRange(node: Node | null, last: Node | null): void {
+	for (; node !== null; node = getNextSibling(node)) {
+		retireEventHostTree(node);
+		if (node === last) return;
+	}
 }
 
 /** Publish a native handler; compiled bundle updates omit the key to refresh only authority. */
@@ -27718,13 +27807,6 @@ export function setEventHandler(el: Element, key?: string, handler?: any): void 
 			journalBag();
 		}
 		(STAGED_DOM?.view(el as any) ?? (el as any))[key] = handler;
-		// The rendering Block owns this host's dispatch lifetime (`Block.retired`).
-		// Lite rows republish under their list's Block, so only a disposed claim is
-		// replaced, as when a hydration retry adopts the same server node. `disposed`
-		// never resets, so the claim needs no journal entry.
-		const owner = (el as any).$$eventOwner as Block | undefined;
-		if (CURRENT_BLOCK !== null && (owner === undefined || owner.disposed))
-			(el as any).$$eventOwner = CURRENT_BLOCK;
 	}
 	// Explicit authority also applies to handlers in modules with no signal bindings.
 	const explicitOwner =
@@ -27735,7 +27817,7 @@ export function setEventHandler(el: Element, key?: string, handler?: any): void 
 		SIGNAL_BINDINGS_ENABLED ||
 		signalDocumentEnabled ||
 		explicitOwner !== null ||
-		SIGNAL_EVENT_OWNERS !== null
+		SIGNAL_EVENT_OWNERS_RECORDED
 	) {
 		// Retain the precise invocation for an event-only reader whose signal
 		// module may arrive later. No owner or wrapper is allocated speculatively.
@@ -27750,27 +27832,24 @@ export function setEventHandler(el: Element, key?: string, handler?: any): void 
 			// Mark that a scope token escaped before queuing publication. A staged
 			// event may be followed by deletion in the same preparation; recording
 			// only at publication would miss that retirement. Discard leaves only
-			// conservative weak metadata, never an owner or signal state.
-			if (
-				(owner instanceof ScopeImpl || owner instanceof BlockImpl) &&
-				SCOPE_SIGNAL_OWNERS.get(owner) === undefined
-			)
-				SCOPE_SIGNAL_OWNERS.set(owner, false);
+			// this conservative flag, never an owner or signal state.
+			if ((owner instanceof ScopeImpl || owner instanceof BlockImpl) && !owner.signalTokenEscaped)
+				owner.signalTokenEscaped = true;
 			// Later writers must replace explicit authority with the usual scope
 			// token, including when both writers are still waiting for publication.
-			const owners = (SIGNAL_EVENT_OWNERS ??= new WeakMap());
+			SIGNAL_EVENT_OWNERS_RECORDED = true;
 			// Compare queued writes at publication: an earlier preparation may
 			// replace even the authority that is currently committed.
 			if (STAGED_COMMIT_CAPTURE !== null)
 				DEFERRED_LAYOUT_DRIVER!.stageAction(() => {
-					if (owners.get(el) !== owner) owners.set(el, owner);
+					if ((el as any).$$signalOwner !== owner) (el as any).$$signalOwner = owner;
 				});
 			else {
-				const previous = owners.get(el);
+				const previous = (el as any).$$signalOwner as SignalEventOwner | undefined;
 				if (previous !== owner) {
 					if (TRANSITION_JOURNAL !== null)
-						TRANSITION_JOURNAL.push(JOURNAL_EVENT_OWNER, owners, el, previous);
-					owners.set(el, owner);
+						TRANSITION_JOURNAL.push(JOURNAL_EVENT_OWNER, el, previous, null);
+					(el as any).$$signalOwner = owner;
 				}
 			}
 		}
@@ -27794,13 +27873,13 @@ export function evt0u(d: HandlerBundle, fn: any): void {
 			signalDocumentEnabled ||
 			activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
-			SIGNAL_EVENT_OWNERS !== null) &&
+			SIGNAL_EVENT_OWNERS_RECORDED) &&
 		(activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
 			STAGED_COMMIT_CAPTURE !== null ||
 			signalDocumentEnabled ||
 			CURRENT_SCOPE?.block.idState.renderOwner?.signalOwner !== undefined ||
-			SIGNAL_EVENT_OWNERS?.get(d.el!) !== CURRENT_SCOPE)
+			(d.el as any).$$signalOwner !== CURRENT_SCOPE)
 	)
 		setEventHandler(d.el!);
 }
@@ -27822,13 +27901,13 @@ export function evt1u(d: HandlerBundle, fn: any, a0: any): void {
 			signalDocumentEnabled ||
 			activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
-			SIGNAL_EVENT_OWNERS !== null) &&
+			SIGNAL_EVENT_OWNERS_RECORDED) &&
 		(activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
 			STAGED_COMMIT_CAPTURE !== null ||
 			signalDocumentEnabled ||
 			CURRENT_SCOPE?.block.idState.renderOwner?.signalOwner !== undefined ||
-			SIGNAL_EVENT_OWNERS?.get(d.el!) !== CURRENT_SCOPE)
+			(d.el as any).$$signalOwner !== CURRENT_SCOPE)
 	)
 		setEventHandler(d.el!);
 }
@@ -27851,13 +27930,13 @@ export function evt2u(d: HandlerBundle, fn: any, a0: any, a1: any): void {
 			signalDocumentEnabled ||
 			activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
-			SIGNAL_EVENT_OWNERS !== null) &&
+			SIGNAL_EVENT_OWNERS_RECORDED) &&
 		(activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
 			STAGED_COMMIT_CAPTURE !== null ||
 			signalDocumentEnabled ||
 			CURRENT_SCOPE?.block.idState.renderOwner?.signalOwner !== undefined ||
-			SIGNAL_EVENT_OWNERS?.get(d.el!) !== CURRENT_SCOPE)
+			(d.el as any).$$signalOwner !== CURRENT_SCOPE)
 	)
 		setEventHandler(d.el!);
 }
@@ -27892,13 +27971,13 @@ export function evtNu(d: HandlerBundle, fn: any, args: any[]): void {
 			signalDocumentEnabled ||
 			activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
-			SIGNAL_EVENT_OWNERS !== null) &&
+			SIGNAL_EVENT_OWNERS_RECORDED) &&
 		(activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
 			STAGED_COMMIT_CAPTURE !== null ||
 			signalDocumentEnabled ||
 			CURRENT_SCOPE?.block.idState.renderOwner?.signalOwner !== undefined ||
-			SIGNAL_EVENT_OWNERS?.get(d.el!) !== CURRENT_SCOPE)
+			(d.el as any).$$signalOwner !== CURRENT_SCOPE)
 	)
 		setEventHandler(d.el!);
 }
@@ -28121,8 +28200,6 @@ export function delegateEvents(eventNames: string[]): void {
 	// They must move together even if the render that first needs a type rolls back.
 	// Seedable prototype may not exist at compiled-module load in exotic hosts.
 	const canSeed = typeof Element !== 'undefined' && Object.isExtensible(Element.prototype);
-	// Every handler publication reads its host's renderer before claiming it.
-	if (canSeed) seedExpando(Element.prototype, '$$eventOwner', false);
 	for (let i = 0; i < eventNames.length; i++) {
 		const name = eventNames[i];
 		if (_delegated.has(name)) continue;
@@ -28496,7 +28573,7 @@ const CAPTURE_PATH: any[] = [];
 const CAPTURE_SLOTS: EventSlot[] = [];
 // Authority is a phase snapshot too: an earlier callback may publish a new
 // handler/owner before a queued ancestor runs. Allocate only after ownership exists.
-let CAPTURE_OWNERS: (SignalOwner | ScopeImpl | BlockImpl | undefined)[] | null = null;
+let CAPTURE_OWNERS: (SignalEventOwner | undefined)[] | null = null;
 
 /** Snapshot the phase's handler slots; returns whether any node on the path has one. */
 function snapshotDelegatedSlots(
@@ -28512,7 +28589,9 @@ function snapshotDelegatedSlots(
 		(type.flags & EVENT_DISABLED_MOUSE) !== 0 ||
 		(!capture && (type.flags & EVENT_DISABLED_ENTER) !== 0);
 	// Only a removed subtree's root carries its stamp (retireEventHostTree), so the
-	// outermost one retired before this delivery retires every path node below it.
+	// outermost one retired before this delivery retires every path node below it:
+	// React never calls an unmounted component's handlers. A host retiring during
+	// the delivery keeps its handlers to its end, like a removed portal's route.
 	let retiredTop = -1;
 	if (retiringHostsSince !== 0)
 		for (let index = CAPTURE_PATH.length - 1; index >= base; index--) {
@@ -28523,14 +28602,9 @@ function snapshotDelegatedSlots(
 			}
 		}
 	let found = false;
-	let retired: number;
 	for (let index = base; index < CAPTURE_PATH.length; index++) {
 		const node = CAPTURE_PATH[index];
 		const slot = node[key] as EventSlot;
-		// A host whose Block retired before this delivery began starts no handler, as
-		// React never calls an unmounted component's handlers. A host retiring during
-		// the delivery keeps its handlers to its end, like a removed portal's route.
-		// An unclaimed host reads `undefined`, which is not above zero.
 		const active =
 			slot != null &&
 			(index <= retiredTop ||
@@ -28539,15 +28613,13 @@ function snapshotDelegatedSlots(
 					(node.localName === 'button' ||
 						node.localName === 'input' ||
 						node.localName === 'select' ||
-						node.localName === 'textarea')) ||
-				((retired = node.$$eventOwner?.retired) > 0 && retired <= epoch))
+						node.localName === 'textarea')))
 				? null
 				: slot;
 		CAPTURE_SLOTS[index] = active;
 		if (active != null) {
 			found = true;
-			if (SIGNAL_EVENT_OWNERS !== null)
-				(CAPTURE_OWNERS ??= [])[index] = SIGNAL_EVENT_OWNERS.get(node);
+			if (SIGNAL_EVENT_OWNERS_RECORDED) (CAPTURE_OWNERS ??= [])[index] = node.$$signalOwner;
 		}
 	}
 	return found;
@@ -31468,6 +31540,10 @@ function teardownPortalState(state: PortalSlot): void {
 		return;
 	}
 	if (state.block) {
+		// Its DOM lies outside every enclosing deletion's range: retire it here. A
+		// portal compiled into a template routes its events through a host element
+		// inside its owner, which the enclosing deletion has already retired.
+		retireHostRange(state.start, state.end);
 		unmountBlock(state.block, true);
 		state.block = null;
 	}
@@ -32787,9 +32863,12 @@ function componentSlotImpl(
 			// stamp; a string tag or unstamped component falls through to markers.
 			// Hydrating, a hole of a template the parent adopted renders in place of
 			// the server node that template's walk found, not of the node at the
-			// cursor (see componentSlotLite's anchored miss).
-			if (hydration !== null && anchor != null && anchor !== parentBlock.endMarker)
-				hydrationCursor = hydration.node = anchor;
+			// cursor (see componentSlotLite's anchored miss), and inserts before the
+			// node after it (parkAtHole).
+			if (hydration !== null && anchor != null && anchor !== parentBlock.endMarker) {
+				hydrationCursor = anchor;
+				anchor = hydration.parkAtHole(anchor);
+			}
 			start = null;
 			end = null;
 		} else {
@@ -35208,6 +35287,77 @@ function deoptItemBody(item: any, scope: Scope): void {
 	block.deoptNode = node;
 }
 
+// A de-opt list item reaches its component through the item's own render,
+// deoptItemBody, and a nested childSlot. When the new descriptor names the
+// component already mounted there, that childSlot only takes its same-component
+// branch: the memo bail, the identical-props bail, or a props update and render
+// of the existing Block. A list of re-created descriptors mostly bails, so each
+// surviving row would pay a whole item render for one comparison. Take that
+// branch here instead, in the item's scope and with the priority its render
+// would inherit. A bail leaves the item's committed descriptor in place: its
+// props are the ones the bailed component kept, so a later render of the item
+// bails on them again, and the root journal needs no entry for it.
+//
+// Returns false, leaving the item to its ordinary render, whenever that render
+// could differ: hydration, signal owners, native reads, a non-root capture, an
+// unsettled item, recorded context reads, or any other child regime. Reached
+// only through ForSlot.itemUpdate, so the compiled @for path that shares
+// updateSurvivor never retains the descriptor renderer.
+function updateDeoptComponent(block: Block, item: any): boolean {
+	const slot = block.slots[0] as ChildSlot | undefined;
+	const child = slot?.block;
+	if (
+		child == null ||
+		block.body !== deoptItemBody ||
+		block.extra !== block.forSlot!.env ||
+		slot!.__kind !== 'childSlot' ||
+		slot!.currentIsBodyFn ||
+		slot!.portal !== null ||
+		slot!.forSlot !== null ||
+		slot!.end === null ||
+		slot!.implicitSignal !== undefined ||
+		item === null ||
+		typeof item !== 'object' ||
+		item.$$kind !== ELEMENT_TAG ||
+		block.pending ||
+		block.pendingMode !== null ||
+		block.renderStatus !== RENDER_VALID ||
+		block.deoptNode !== null ||
+		block.$$ctxDirect !== null ||
+		block.$$ctxReads !== null ||
+		NATIVE_READ_DRIVER !== null ||
+		(WIP_CAPTURE !== null && WIP_CAPTURE.rootTransaction !== true) ||
+		signalDocumentEnabled ||
+		block.idState.renderOwner?.signalOwner !== undefined ||
+		activeHydration() !== null
+	)
+		return false;
+	const previousScope = CURRENT_SCOPE;
+	const previousBlock = CURRENT_BLOCK;
+	CURRENT_SCOPE = block;
+	CURRENT_BLOCK = block;
+	try {
+		// A scoped descriptor resolves its fields in the scope that reads them.
+		const comp = item.type;
+		if (comp !== slot!.currentComp) return false;
+		block.currentRenderMode = previousBlock?.currentRenderMode ?? 'urgent';
+		block.currentRenderDeferred = previousBlock?.currentRenderDeferred ?? false;
+		const props = item.props;
+		if (tryMemoBail(child, comp, props) || (props === child.props && tryImplicitBail(child)))
+			return true;
+		if (ROOT_RENDER_TRANSACTION !== null && !ROOT_RENDER_ROLLBACK && block.props !== item)
+			TRANSITION_JOURNAL!.push(JOURNAL_INPUTS, block, block.props, block.extra);
+		block.props = item;
+		if (child.props !== props) journalRootProperty(child, 'props', child.props);
+		child.props = props;
+		renderBlock(child);
+		return true;
+	} finally {
+		CURRENT_SCOPE = previousScope;
+		CURRENT_BLOCK = previousBlock;
+	}
+}
+
 // Guarded native maps invoke componentSlot directly from their compiled item
 // body. Keep that same slot ownership when a custom map returns the matching
 // component descriptors, so switching dispatch modes preserves the component
@@ -35747,10 +35897,16 @@ function isPortalTarget(block: Block, domParent: Node): boolean {
 	return false;
 }
 
-const NATIVE_ARRAY_MAP = Array.prototype.map;
+// Snapshot the intrinsics at module load, before user code can replace them,
+// so a later replacement is recognized as authored code. Bundlers cannot prove
+// a bare property read side-effect-free, so each read sits in a pure IIFE:
+// a bundle that never reaches these guards drops it rather than keeping a dead
+// statement. `Reflect.apply` is a known-pure global read and needs no wrapper.
+const NATIVE_ARRAY_MAP = /* @__PURE__ */ (() => Array.prototype.map)();
 const NATIVE_ARRAY_FILTER = /* @__PURE__ */ (() => Array.prototype.filter)();
 const NATIVE_REFLECT_APPLY = Reflect.apply;
-const NATIVE_ARRAY_SPECIES_GETTER = Object.getOwnPropertyDescriptor(Array, Symbol.species)?.get;
+const NATIVE_ARRAY_SPECIES_GETTER = /* @__PURE__ */ (() =>
+	Object.getOwnPropertyDescriptor(Array, Symbol.species)?.get)();
 // Components hand the reconciler immutable array snapshots. Memoizing indexed
 // accessor classification by snapshot identity avoids a descriptor allocation
 // per row on every unchanged parent render; holes and intrinsic overrides are
@@ -36210,6 +36366,7 @@ function renderPreparedChildList(
 			env: undefined,
 			adopt: null,
 			plainDeopt: false,
+			itemUpdate: null,
 			mappedNative: undefined,
 			selectionItems: undefined,
 			signalSite: undefined,
@@ -36311,6 +36468,7 @@ function renderPreparedChildList(
 	// re-deriving it by identity in mountItem (see ForSlot.plainDeopt).
 	const plainDeopt = compiledMapBody === undefined && mappedFallback !== true;
 	state.forSlot.plainDeopt = plainDeopt;
+	state.forSlot.itemUpdate = plainDeopt ? updateDeoptComponent : null;
 	const fastFlags = compiledMapFlags || 0;
 	const ssrMarkerless =
 		compiledMapBody === undefined ? markerlessMappedFallback || plainDeopt : (fastFlags & 16) !== 0;
@@ -36479,13 +36637,22 @@ export function bindSignalChild(
 	onlyChild?: boolean,
 	bindingMarker?: string,
 ): unknown {
+	// A markerless only-child hole keeps its last written primitive as the token
+	// (see below), whose Text node is the host's first child. An unchanged
+	// primitive then does nothing, as childTextHoleUpdate's raw-value guard does,
+	// without a DOM read. Raw HTML still claims the host first.
+	const textToken = onlyChild && previous != null && typeof previous !== 'object';
+	if (textToken && previous === value && !dangerouslySetInnerHTMLOwnsChild(domParent, value))
+		return value;
 	const prior =
 		typeof previous === 'object' &&
 		previous !== null &&
 		(previous as DirectSignalChildBinding)[DIRECT_SIGNAL_CHILD] === true
 			? (previous as DirectSignalChildBinding)
 			: null;
-	const cachedText = prior?.text ?? (previous instanceof Text ? previous : null);
+	const cachedText =
+		prior?.text ??
+		(previous instanceof Text ? previous : textToken ? (getFirstChild(domParent) as Text) : null);
 	if (!isSignalHandle(value)) {
 		const type = typeof value;
 		// An ordinary marker-bounded hole keeps textHoleUpdate's fast path: its
@@ -36531,7 +36698,22 @@ export function bindSignalChild(
 			if (WIP_CAPTURE === null) finish(false);
 			else (WIP_CAPTURE.renderCleanups ??= []).push(finish);
 		}
-		return primitiveToken ? value : text;
+		if (primitiveToken) return value;
+		// A primitive whose Text node is the host's first child becomes the token.
+		// A previous token or a client mount's empty template proves that position;
+		// otherwise compare once, because hydration can keep unclaimed server
+		// content ahead of the node it adopted. A staged ViewTransition render has
+		// not placed the node yet.
+		return text !== null &&
+			type !== 'object' &&
+			type !== 'function' &&
+			parentScope.slots[slotKey] === undefined &&
+			STAGED_DOM === null &&
+			(textToken ||
+				(previous === null && !parentScope.mounted && currentHydration === null) ||
+				getFirstChild(domParent) === text)
+			? value
+			: text;
 	}
 	if (prior !== null && !prior.disposed && prior.handle === value) {
 		const next = readSignalBinding(value);
@@ -38303,12 +38485,16 @@ const OBJ_PROTO = Object.prototype;
 
 // Runs on every re-render for every memo child (both tryMemoBail call sites),
 // so the common plain-object case is a zero-allocation for-in compare — no
-// Object.keys arrays. Semantics match React's shallowEqual exactly: Object.is
-// on values (NaN equal, ±0 differ), own-enumerable string keys only, key-SET
-// equality (loop 1 checks ownership and values, loop 2's count balances the
-// key sets). Inherited values must not stand in for removed own props, even
-// when they compare equal. Non-plain prototypes take the exact Object.keys
-// slow path, where for-in would also see inherited keys.
+// Object.keys arrays. Semantics match React's shallowEqual: Object.is on values
+// (NaN equal, ±0 differ), own-enumerable string keys only, key-SET equality
+// (loop 1 checks values and ownership, loop 2's count balances the key sets).
+// Inherited values must not stand in for removed own props, even when they
+// compare equal. On a plain or null-prototype object a missing own prop reads
+// as undefined or an Object.prototype member, which is a function or an object,
+// so only those values need the ownership lookup; a primitive that compares
+// equal is already own unless Object.prototype itself carries that primitive.
+// Non-plain prototypes take the exact Object.keys slow path, where for-in would
+// also see inherited keys.
 function shallowEqualProps(a: any, b: any): boolean {
 	if (a === b) return true;
 	if (a == null || b == null) return false;
@@ -38320,7 +38506,12 @@ function shallowEqualProps(a: any, b: any): boolean {
 	let count = 0;
 	for (const k in a) {
 		const v = a[k];
-		if (!hasOwnProp.call(b, k) || !Object.is(v, b[k])) return false;
+		if (!Object.is(v, b[k])) return false;
+		if (
+			(v === undefined || typeof v === 'object' || typeof v === 'function') &&
+			!hasOwnProp.call(b, k)
+		)
+			return false;
 		count++;
 	}
 	for (const _k in b) count--;
@@ -43670,7 +43861,10 @@ export function ifBlock(
 		// SOLE-hole case — a @if that is the only thing an enclosing arm/component
 		// renders (e.g. `@try { @if (…) {…} }`, the router Match shape) — where the
 		// anchor is the arm's END marker and the cursor is parked on the @if's open.
-		const open = passthrough ? null : (hydration?.resolveOpen(anchor ?? null, domParent) ?? null);
+		// branchOpen frames another arm's node that the template walk found here.
+		const open = passthrough
+			? null
+			: (hydration?.branchOpen(anchor ?? null, domParent, parentScope) ?? null);
 		if (open !== null) {
 			start = open;
 			end = hydration!.close(open);
@@ -44456,22 +44650,9 @@ function detachDeoptTreeRefs(
 	uncommitted: UncommittedRefAttaches | null = null,
 	activityRefs: WeakMap<Element | FragmentInstance, ActivityRefState> | null = null,
 ): void {
-	// Teardown runs just before every blockless de-opt removal detaches `node`.
-	if (out === null) retireEventHostTree(node);
 	// No de-opt descriptor ref was ever stamped → nothing to detach or collect
 	// anywhere; skip the subtree scan. (Monotone flag — see noteDeoptRef.)
 	if (!DEOPT_REFS_STAMPED) return;
-	detachDeoptSubtreeRefs(node, out, shouldDetach, ownerScope, uncommitted, activityRefs);
-}
-
-function detachDeoptSubtreeRefs(
-	node: Node,
-	out: SuspenseRefEntry[] | null,
-	shouldDetach: boolean,
-	ownerScope: Scope | undefined,
-	uncommitted: UncommittedRefAttaches | null,
-	activityRefs: WeakMap<Element | FragmentInstance, ActivityRefState> | null,
-): void {
 	const ref = getDeoptDesc(node)?.props?.ref ?? activityRefs?.get(node as Element)?.connected;
 	if (ref != null) {
 		if (out !== null) {
@@ -44502,7 +44683,7 @@ function detachDeoptSubtreeRefs(
 			c = nodeAfterPortalRange(c, rangeEnd);
 			continue;
 		}
-		detachDeoptSubtreeRefs(c, out, shouldDetach, ownerScope, uncommitted, activityRefs);
+		detachDeoptTreeRefs(c, out, shouldDetach, ownerScope, uncommitted, activityRefs);
 		c = getNextSibling(c);
 	}
 }
@@ -44632,7 +44813,9 @@ export function switchBlock(
 		// Mirror ifBlock's sole-control-flow adoption: when @switch is the only
 		// output of an enclosing component/arm, its compiler anchor is that owner's
 		// END marker while the hydration cursor sits on the switch range's open.
-		const open = passthrough ? null : (hydration?.resolveOpen(anchor ?? null, domParent) ?? null);
+		const open = passthrough
+			? null
+			: (hydration?.branchOpen(anchor ?? null, domParent, parentScope) ?? null);
 		if (open !== null) {
 			start = open;
 			end = hydration!.close(open);
@@ -44724,6 +44907,11 @@ interface ForSlot {
 	// one hidden class; only childSlot ever stamps or reads it, because only
 	// childSlot passes mountItem the de-opt sentinel.
 	plainDeopt: boolean;
+	// A plain de-opt list's survivor update (updateDeoptComponent), null on
+	// every other list. A function rather than a flag for the same reason as
+	// plainDeopt: updateSurvivor, which compiled @for lists share, calls it
+	// without naming the descriptor renderer.
+	itemUpdate: ((block: Block, item: any) => boolean) | null;
 	// Set only when the compiler proved a keyed equality selection. Identity
 	// gates the two-row update without retaining extra state on ordinary lists.
 	selectionItems: ArrayLike<any> | undefined;
@@ -44839,6 +45027,7 @@ export function forBlock<T>(
 			// sentinel — but both ForSlot literals declare it so every slot shares
 			// one hidden class and the stamp in childSlot transitions nothing.
 			plainDeopt: false,
+			itemUpdate: null,
 			mappedNative: undefined,
 			selectionItems: undefined,
 			signalSite,
@@ -45559,14 +45748,19 @@ function updateSurvivor<T>(
 	// the body can't observe position (indexIndependent — the common index-less
 	// `@for`) or the position is also unchanged. This is what makes a pure reorder
 	// (shuffle / reverse / rotate) move survivors' DOM without re-rendering them.
+	// The list's shape record restores itemIndex from chain order; reconcileKeyed
+	// takes it before the first survivor index write.
 	const journal = ROOT_RENDER_TRANSACTION !== null && !ROOT_RENDER_ROLLBACK;
-	if (journal && block.itemIndex !== newIdx)
-		journalRootProperty(block, 'itemIndex', block.itemIndex);
 	if (journal && block.body !== itemBody) journalRootProperty(block, 'body', block.body);
 	if (pure && block.props === newItem && (indexIndependent || block.itemIndex === newIdx)) {
 		block.itemIndex = newIdx;
 		block.body = itemBody as ComponentBody;
 	} else {
+		// A plain de-opt list can update a same-component item without its render.
+		if (block.forSlot!.itemUpdate?.(block, newItem)) {
+			block.itemIndex = newIdx;
+			return;
+		}
 		// Item and captured inputs change together before the body can run. One
 		// entry restores both without a second property key or journal guard.
 		if (journal && (block.props !== newItem || block.extra !== env))
@@ -45889,6 +46083,8 @@ function reconcileKeyed<T>(
 	// Scalar survivor updates journal their own bindings. Capture the chain and
 	// key map only if reconciliation actually changes membership or order, so
 	// unchanged lists do not allocate a second O(N) representation every render.
+	// A survivor's index moves only with that order, so the first index write
+	// takes the capture too, which restores every row's index on rollback.
 	let journalShape = TRANSITION_JOURNAL !== null;
 
 	// Fast path: empty → fill — the linear first-fill pass (callers on the
@@ -45952,8 +46148,10 @@ function reconcileKeyed<T>(
 			block.props !== newItem ||
 			block.body !== itemBody ||
 			block.itemIndex !== prefixLen
-		)
+		) {
+			if (journalShape && block.itemIndex !== prefixLen) journalShape = journalForSlot(state);
 			updateSurvivor(block, newItem, prefixLen, itemBody, pure, lite, indexIndependent, state.env);
+		}
 		oldFirst = block.nextSibling!;
 		prefixLen++;
 	}
@@ -45972,8 +46170,10 @@ function reconcileKeyed<T>(
 		if (observeKey !== undefined) observeKey(newEnd, newKey);
 		const block = oldLast;
 		// Same stable-survivor skip as the prefix walk (see above).
-		if (!pure || block.props !== newItem || block.body !== itemBody || block.itemIndex !== newEnd)
+		if (!pure || block.props !== newItem || block.body !== itemBody || block.itemIndex !== newEnd) {
+			if (journalShape && block.itemIndex !== newEnd) journalShape = journalForSlot(state);
 			updateSurvivor(block, newItem, newEnd, itemBody, pure, lite, indexIndependent, state.env);
+		}
 		oldLast = block.prevSibling!;
 		newEnd--;
 		oldRemain--;
@@ -46137,10 +46337,7 @@ function reconcileKeyed<T>(
 			const next: Block | null = cur!.nextSibling!;
 			const newRelIdx = newKeysToIdx.get(cur!.key);
 			if (newRelIdx === undefined) {
-				if (journalShape) {
-					journalForSlot(state);
-					journalShape = false;
-				}
+				if (journalShape) journalShape = journalForSlot(state);
 				if (itemRemovalDefers()) parkItemForHold(cur!);
 				else unmountBlock(cur!);
 				oldItems.delete(cur!.key);
@@ -46153,8 +46350,15 @@ function reconcileKeyed<T>(
 				const newIdx = prefixLen + newRelIdx;
 				const newItem = items[newIdx];
 				// Same stable-survivor skip as the prefix walk (see above).
-				if (!pure || cur!.props !== newItem || cur!.body !== itemBody || cur!.itemIndex !== newIdx)
+				if (
+					!pure ||
+					cur!.props !== newItem ||
+					cur!.body !== itemBody ||
+					cur!.itemIndex !== newIdx
+				) {
+					if (journalShape && cur!.itemIndex !== newIdx) journalShape = journalForSlot(state);
 					updateSurvivor(cur!, newItem, newIdx, itemBody, pure, lite, indexIndependent, state.env);
+				}
 			}
 			cur = next;
 			oldIdx++;
@@ -46483,11 +46687,16 @@ function deferRootOwnedListClear(state: ForSlot, certified: boolean = false): bo
 			}
 			if (node !== end) wholeParent = false;
 		}
-		for (let block = oldHead; block !== null; block = block.nextSibling) {
-			block.disposed = true;
-			if (STAGED_COMMIT_CAPTURE) DEFERRED_LAYOUT_DRIVER!.retireHosts(block);
-			else block.retired = ++eventRootEpoch;
-		}
+		for (let block = oldHead; block !== null; block = block.nextSibling) block.disposed = true;
+		// Inert rows run no cleanup, so only removing a focused row can dispatch at
+		// one. Every child of this owned parent is an outgoing row: retire the one
+		// holding the focus the scheduler captured for this pass, not every row. A
+		// drain over several focused documents (an array) retires none; an inert
+		// row's handler belongs to its live list owner.
+		let row: Node | null | undefined = (renderingFocus as FocusSelectionSnapshot | null)?.focused;
+		while (row != null && domNode(row).parentNode !== parent)
+			row = domNode(row).parentNode ?? (row as ShadowRoot).host;
+		if (row != null) retireEventHostTree(row);
 		if (wholeParent) {
 			(STAGED_DOM?.view(parent) ?? parent).textContent = '';
 			(STAGED_DOM?.view(parent) ?? parent).appendChild(start);
@@ -46551,9 +46760,13 @@ function batchClearItems(
 	}
 	TEARDOWN_DEPTH++;
 	try {
+		// Retire every row before any row's cleanup can move focus off another: the
+		// whole span between the list's markers leaves below. As for parked rows,
+		// only captured focus (or no capture at all) can make a row dispatch.
+		if (renderingFocus !== null || !inFlush)
+			retireHostRange(getNextSibling(state.start), state.end);
 		// Dispose the items before their DOM leaves, like every other deletion:
-		// cleanups observe attached hosts, and the focusout that removing a focused
-		// host dispatches finds them retired. Walk the intrusive item chain (head →
+		// cleanups observe attached hosts. Walk the intrusive item chain (head →
 		// nextSibling) rather than the Map's iterator: zero allocation and a
 		// monomorphic pointer chase. Callers reset head/tail only AFTER this returns,
 		// so the chain still covers exactly the old items here.
@@ -46568,8 +46781,6 @@ function batchClearItems(
 				// additionally skips the subtree scan for ref-free items.
 				if (b.deoptNode !== null && b.deoptRefs) detachDeoptTreeRefs(b.deoptNode, null);
 				b.disposed = true;
-				if (STAGED_COMMIT_CAPTURE) DEFERRED_LAYOUT_DRIVER!.retireHosts(b);
-				else b.retired = ++eventRootEpoch;
 			}
 		}
 		const p = domNode(state.start).parentNode!;
@@ -48396,7 +48607,10 @@ function makeRoot(
 					// teardown because their DOM lives in a foreign target — see the
 					// portalSlotSlot branch in unmountScope. This also deliberately makes
 					// unmount safe after external DOM removal instead of surfacing the
-					// renderer-specific NotFoundError React happens to expose.
+					// renderer-specific NotFoundError React happens to expose. Its content
+					// retires before any cleanup runs, even a presentation left in place:
+					// its handlers belong to this root.
+					retireHostRange(getFirstChild(container), null);
 					withRefDetachSuppression(presentationRefs, () => unmountBlock(rootBlock!, false));
 					// Root unmount runs outside any flush, so no commit follows — drain the
 					// teardown ref detaches queued above directly.
