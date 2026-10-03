@@ -8,7 +8,7 @@ set -euo pipefail
 ROOT=$PWD
 OUT=$ROOT/benchmarks/results
 mkdir -p "$OUT"
-ITER=${AB_ITER:-15}
+ITER=${AB_ITER:-60}
 BASE=6a2c4a7d9a0eba020d379b2ca724d2dc7f9cfe7d
 
 wait_port() {
