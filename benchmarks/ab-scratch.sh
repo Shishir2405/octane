@@ -38,43 +38,29 @@ SVG=octane-tsrx-svg-dashboard-bench
 
 # name sha
 COMMITS=(
-	"p833 6927595656860f12fef79948135f5f1ee29595c2"
-	"main dc3e180236a5d55fb1288ef8738ace52870ef891"
-	"both d6591cb3143824660f1ac7f9631845dd20908bbd"
-	"bothS 778d7fddbcf6aea7824b05d63652a0e1b28a0937"
+	"main 950ef0b0bd80b87e8a2777b068dec65c6905eabb"
+	"m3 444f63f35074e72222f650670d26588067464d6f"
+	"m4 0f86fc137c2271d132c0f57d9a68c88608e139cc"
 )
-SVG_OLD=7a6fba3aef8a0bb1c9f5a01ca00bbcec0e4aa6f1
 
 pnpm --filter react-jsbench build >"$OUT/build-react-js.log" 2>&1
 pnpm --filter react-compiler-memowall-bench build >"$OUT/build-react-mw.log" 2>&1
-pnpm --filter react-svg-dashboard-bench build >"$OUT/build-react-svg.log" 2>&1
 serve benchmarks/js-framework/react 5175
 serve benchmarks/memo-wall/react-compiler 5226
-serve benchmarks/svg-dashboard/react 5303
 
 JS_T='{"name":"react","url":"http://localhost:5175/","ready":"#run"}'
 MW_T='{"name":"react","url":"http://localhost:5226/"}'
-SVG_T='{"name":"react","url":"http://localhost:5303/"}'
 
 i=0
 for entry in "${COMMITS[@]}"; do
 	read -r name sha <<<"$entry"
-	if [ "$name" = o639 ]; then
-		tree "$sha" $JS $MW
-	else
-		tree "$sha" $JS $MW $SVG
-	fi
+	tree "$sha" $JS $MW
 	serve "/tmp/at-$sha/benchmarks/js-framework/octane-tsrx" $((7000 + i))
 	JS_T="$JS_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7000 + i))/\",\"ready\":\"#run\"}"
 	serve "/tmp/at-$sha/benchmarks/memo-wall/octane-tsrx" $((7100 + i))
 	MW_T="$MW_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7100 + i))/\"}"
-	if [ "$name" != o639 ]; then
-		serve "/tmp/at-$sha/benchmarks/svg-dashboard/octane-tsrx" $((7200 + i))
-		SVG_T="$SVG_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7200 + i))/\"}"
-	fi
 	i=$((i + 1))
 done
 
-TARGETS="[$JS_T]" BENCH_JSON="$OUT/js-framework-reorder-attrib.json" node benchmarks/js-framework/run-reorder.mjs "$ITER" || echo "reorder exited $?"
 TARGETS="[$MW_T]" BENCH_JSON="$OUT/memo-wall-attrib.json" node benchmarks/memo-wall/run.mjs "$ITER" || echo "memo-wall exited $?"
-TARGETS="[$SVG_T]" BENCH_JSON="$OUT/svg-dashboard-attrib.json" node benchmarks/svg-dashboard/run.mjs "$ITER" || echo "svg-dashboard exited $?"
+TARGETS="[$JS_T]" BENCH_JSON="$OUT/js-framework-reorder-attrib.json" node benchmarks/js-framework/run-reorder.mjs "$ITER" || echo "reorder exited $?"
