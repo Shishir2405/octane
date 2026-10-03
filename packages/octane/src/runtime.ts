@@ -4756,6 +4756,10 @@ function journalForSlot(state: ForSlot): false {
 			seen.delete(state);
 		});
 		journalRootRange(domNode(state.start).parentNode!, state.start, state.end);
+		// No chain record restores indices here, so rows that already exist keep
+		// theirs individually before reconcileKeyed moves them.
+		for (let b: Block | null = state.head; b !== null; b = b.nextSibling)
+			TRANSITION_JOURNAL!.push(JOURNAL_PROP, b, 'itemIndex', b.itemIndex);
 		return false;
 	}
 	// Rollback also restores each row's itemIndex from its chain position: every
@@ -45894,7 +45898,7 @@ function reconcileKeyed<T>(
 	// key map only if reconciliation actually changes membership or order, so
 	// unchanged lists do not allocate a second O(N) representation every render.
 	// A survivor's index moves only with that order, so the first index write
-	// takes the capture too, and rollback restores indices from the chain.
+	// takes the capture too, which restores every row's index on rollback.
 	let journalShape = TRANSITION_JOURNAL !== null;
 
 	// Fast path: empty → fill — the linear first-fill pass (callers on the
