@@ -1,0 +1,14 @@
+import { mergeConfig } from 'vite';
+import base from './vite.config.js';
+
+// Scratch A/B only: the pre-#983 terser build, served from dist-alt.
+export default mergeConfig(base, {
+	build: {
+		outDir: 'dist-alt',
+		minify: 'terser',
+		terserOptions: {
+			compress: { passes: 5, reduce_vars: false, inline: 0, booleans: false, comparisons: false, toplevel: true },
+			mangle: { toplevel: true },
+		},
+	},
+});

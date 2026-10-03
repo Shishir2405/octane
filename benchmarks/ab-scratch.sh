@@ -36,24 +36,24 @@ build_new() {
 	pnpm --filter "$f" exec vite build --config vite.alt.config.js >"$OUT/build-terser-$f.log" 2>&1 || { tail -50 "$OUT/build-terser-$f.log"; return 1; }
 }
 
-SPA_OLD=3d093488363eebc1f093ebcc3025f76827073fad
+REORDER_OLD=73b22fd1185db202f218e1a7e9e230571ef01c30
 
-# spa-navigation: octane-tsrx vs solid. The alt build is unminified, as both
-# fixtures were before #983.
-old_tree $SPA_OLD octane-tsrx-spa-navigation-bench solid-spa-navigation-bench
-build_new octane-tsrx-spa-navigation-bench
-build_new solid-spa-navigation-bench
-serve benchmarks/spa-navigation/octane-tsrx 5310
-serve benchmarks/spa-navigation/solid 5313
-serve benchmarks/spa-navigation/octane-tsrx 6410 --config vite.alt.config.js
-serve benchmarks/spa-navigation/solid 6413 --config vite.alt.config.js
-serve /tmp/old-$SPA_OLD/benchmarks/spa-navigation/octane-tsrx 6310
-serve /tmp/old-$SPA_OLD/benchmarks/spa-navigation/solid 6313
+# js-framework-reorder: octane-tsrx vs React. The alt build is the pre-#983
+# terser build.
+old_tree $REORDER_OLD octane-tsrx-jsbench react-jsbench
+build_new octane-tsrx-jsbench
+build_new react-jsbench
+serve benchmarks/js-framework/octane-tsrx 5176
+serve benchmarks/js-framework/react 5175
+serve benchmarks/js-framework/octane-tsrx 6476 --config vite.alt.config.js
+serve benchmarks/js-framework/react 6475 --config vite.alt.config.js
+serve /tmp/old-$REORDER_OLD/benchmarks/js-framework/octane-tsrx 6376
+serve /tmp/old-$REORDER_OLD/benchmarks/js-framework/react 6375
 TARGETS='[
-	{"name":"octane-tsrx","url":"http://localhost:5310/"},
-	{"name":"solid","url":"http://localhost:5313/"},
-	{"name":"octane-tsrx-unminified","url":"http://localhost:6410/"},
-	{"name":"solid-unminified","url":"http://localhost:6413/"},
-	{"name":"octane-tsrx-old","url":"http://localhost:6310/"},
-	{"name":"solid-old","url":"http://localhost:6313/"}
-]' BENCH_JSON="$OUT/spa-navigation-ab.json" node benchmarks/spa-navigation/run.mjs "$ITER" || echo "spa-navigation A/B exited $?"
+	{"name":"octane-tsrx","url":"http://localhost:5176/","ready":"#run"},
+	{"name":"react","url":"http://localhost:5175/","ready":"#run"},
+	{"name":"octane-tsrx-terser","url":"http://localhost:6476/","ready":"#run"},
+	{"name":"react-terser","url":"http://localhost:6475/","ready":"#run"},
+	{"name":"octane-tsrx-old","url":"http://localhost:6376/","ready":"#run"},
+	{"name":"react-old","url":"http://localhost:6375/","ready":"#run"}
+]' BENCH_JSON="$OUT/js-framework-reorder-ab.json" node benchmarks/js-framework/run-reorder.mjs "$ITER" || echo "reorder A/B exited $?"
