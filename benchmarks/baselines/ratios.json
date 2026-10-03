@@ -5533,6 +5533,38 @@
     "note": "Live DOM getter calls preserve first raw-thenable rollback and external edits; descriptor updates reuse the value already read for comparison."
   },
   {
+    "suite": "root-transactions",
+    "op": "setup_allocations",
+    "target": "setup-tick",
+    "reference": "setup-tick-work",
+    "maxRatio": 0,
+    "note": "An ordinary root commit reuses its root's committed transaction shell, capture queues and window slots; DOM, effects, refs, native events and cleanup are verified in clean and observed bundles."
+  },
+  {
+    "suite": "root-transactions",
+    "op": "setup_allocations",
+    "target": "setup-props",
+    "reference": "setup-props-work",
+    "maxRatio": 0,
+    "note": "An ordinary root commit reuses its root's committed transaction shell, capture queues and window slots; DOM, effects, refs, native events and cleanup are verified in clean and observed bundles."
+  },
+  {
+    "suite": "root-transactions",
+    "op": "setup_allocations",
+    "target": "setup-effects",
+    "reference": "setup-effects-work",
+    "maxRatio": 0,
+    "note": "An ordinary root commit reuses its root's committed transaction shell, capture queues and window slots; DOM, effects, refs, native events and cleanup are verified in clean and observed bundles."
+  },
+  {
+    "suite": "root-transactions",
+    "op": "setup_allocations",
+    "target": "setup-after-hold",
+    "reference": "setup-after-hold-work",
+    "maxRatio": 0,
+    "note": "An ordinary root commit reuses its root's committed transaction shell, capture queues and window slots; DOM, effects, refs, native events and cleanup are verified in clean and observed bundles."
+  },
+  {
     "suite": "descriptor-renderer",
     "op": "live_indexes",
     "target": "children-128-owned-unchanged",

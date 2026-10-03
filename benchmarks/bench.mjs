@@ -1353,6 +1353,7 @@ const SUITES = [
 			{ script: 'inputs.mjs', args: () => [] },
 			{ script: 'reorders.mjs', args: () => [] },
 			{ script: 'contracts.mjs', args: () => [] },
+			{ script: 'setup.mjs', args: () => [] },
 		],
 	},
 	{
