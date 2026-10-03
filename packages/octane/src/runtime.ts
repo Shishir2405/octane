@@ -35287,6 +35287,77 @@ function deoptItemBody(item: any, scope: Scope): void {
 	block.deoptNode = node;
 }
 
+// A de-opt list item reaches its component through the item's own render,
+// deoptItemBody, and a nested childSlot. When the new descriptor names the
+// component already mounted there, that childSlot only takes its same-component
+// branch: the memo bail, the identical-props bail, or a props update and render
+// of the existing Block. A list of re-created descriptors mostly bails, so each
+// surviving row would pay a whole item render for one comparison. Take that
+// branch here instead, in the item's scope and with the priority its render
+// would inherit. A bail leaves the item's committed descriptor in place: its
+// props are the ones the bailed component kept, so a later render of the item
+// bails on them again, and the root journal needs no entry for it.
+//
+// Returns false, leaving the item to its ordinary render, whenever that render
+// could differ: hydration, signal owners, native reads, a non-root capture, an
+// unsettled item, recorded context reads, or any other child regime. Reached
+// only through ForSlot.itemUpdate, so the compiled @for path that shares
+// updateSurvivor never retains the descriptor renderer.
+function updateDeoptComponent(block: Block, item: any): boolean {
+	const slot = block.slots[0] as ChildSlot | undefined;
+	const child = slot?.block;
+	if (
+		child == null ||
+		block.body !== deoptItemBody ||
+		block.extra !== block.forSlot!.env ||
+		slot!.__kind !== 'childSlot' ||
+		slot!.currentIsBodyFn ||
+		slot!.portal !== null ||
+		slot!.forSlot !== null ||
+		slot!.end === null ||
+		slot!.implicitSignal !== undefined ||
+		item === null ||
+		typeof item !== 'object' ||
+		item.$$kind !== ELEMENT_TAG ||
+		block.pending ||
+		block.pendingMode !== null ||
+		block.renderStatus !== RENDER_VALID ||
+		block.deoptNode !== null ||
+		block.$$ctxDirect !== null ||
+		block.$$ctxReads !== null ||
+		NATIVE_READ_DRIVER !== null ||
+		(WIP_CAPTURE !== null && WIP_CAPTURE.rootTransaction !== true) ||
+		signalDocumentEnabled ||
+		block.idState.renderOwner?.signalOwner !== undefined ||
+		activeHydration() !== null
+	)
+		return false;
+	const previousScope = CURRENT_SCOPE;
+	const previousBlock = CURRENT_BLOCK;
+	CURRENT_SCOPE = block;
+	CURRENT_BLOCK = block;
+	try {
+		// A scoped descriptor resolves its fields in the scope that reads them.
+		const comp = item.type;
+		if (comp !== slot!.currentComp) return false;
+		block.currentRenderMode = previousBlock?.currentRenderMode ?? 'urgent';
+		block.currentRenderDeferred = previousBlock?.currentRenderDeferred ?? false;
+		const props = item.props;
+		if (tryMemoBail(child, comp, props) || (props === child.props && tryImplicitBail(child)))
+			return true;
+		if (ROOT_RENDER_TRANSACTION !== null && !ROOT_RENDER_ROLLBACK && block.props !== item)
+			TRANSITION_JOURNAL!.push(JOURNAL_INPUTS, block, block.props, block.extra);
+		block.props = item;
+		if (child.props !== props) journalRootProperty(child, 'props', child.props);
+		child.props = props;
+		renderBlock(child);
+		return true;
+	} finally {
+		CURRENT_SCOPE = previousScope;
+		CURRENT_BLOCK = previousBlock;
+	}
+}
+
 // Guarded native maps invoke componentSlot directly from their compiled item
 // body. Keep that same slot ownership when a custom map returns the matching
 // component descriptors, so switching dispatch modes preserves the component
@@ -36295,6 +36366,7 @@ function renderPreparedChildList(
 			env: undefined,
 			adopt: null,
 			plainDeopt: false,
+			itemUpdate: null,
 			mappedNative: undefined,
 			selectionItems: undefined,
 			signalSite: undefined,
@@ -36396,6 +36468,7 @@ function renderPreparedChildList(
 	// re-deriving it by identity in mountItem (see ForSlot.plainDeopt).
 	const plainDeopt = compiledMapBody === undefined && mappedFallback !== true;
 	state.forSlot.plainDeopt = plainDeopt;
+	state.forSlot.itemUpdate = plainDeopt ? updateDeoptComponent : null;
 	const fastFlags = compiledMapFlags || 0;
 	const ssrMarkerless =
 		compiledMapBody === undefined ? markerlessMappedFallback || plainDeopt : (fastFlags & 16) !== 0;
@@ -44834,6 +44907,11 @@ interface ForSlot {
 	// one hidden class; only childSlot ever stamps or reads it, because only
 	// childSlot passes mountItem the de-opt sentinel.
 	plainDeopt: boolean;
+	// A plain de-opt list's survivor update (updateDeoptComponent), null on
+	// every other list. A function rather than a flag for the same reason as
+	// plainDeopt: updateSurvivor, which compiled @for lists share, calls it
+	// without naming the descriptor renderer.
+	itemUpdate: ((block: Block, item: any) => boolean) | null;
 	// Set only when the compiler proved a keyed equality selection. Identity
 	// gates the two-row update without retaining extra state on ordinary lists.
 	selectionItems: ArrayLike<any> | undefined;
@@ -44949,6 +45027,7 @@ export function forBlock<T>(
 			// sentinel — but both ForSlot literals declare it so every slot shares
 			// one hidden class and the stamp in childSlot transitions nothing.
 			plainDeopt: false,
+			itemUpdate: null,
 			mappedNative: undefined,
 			selectionItems: undefined,
 			signalSite,
@@ -45677,6 +45756,11 @@ function updateSurvivor<T>(
 		block.itemIndex = newIdx;
 		block.body = itemBody as ComponentBody;
 	} else {
+		// A plain de-opt list can update a same-component item without its render.
+		if (block.forSlot!.itemUpdate?.(block, newItem)) {
+			block.itemIndex = newIdx;
+			return;
+		}
 		// Item and captured inputs change together before the body can run. One
 		// entry restores both without a second property key or journal guard.
 		if (journal && (block.props !== newItem || block.extra !== env))

@@ -638,6 +638,7 @@ const SUITES = [
 		runs: [
 			{ script: 'run.mjs', args: (n) => [String(n)] },
 			{ label: 'bail-compare', script: 'bail-compare.mjs', args: () => [] },
+			{ label: 'survivor-work', script: 'survivor-work.mjs', args: () => [] },
 		],
 	},
 	{

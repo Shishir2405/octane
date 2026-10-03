@@ -1009,6 +1009,22 @@
   },
   {
     "suite": "memo-wall",
+    "op": "bailed_row_journal_slots",
+    "target": "survivor-work",
+    "reference": "survivor-work-budget",
+    "maxRatio": 0,
+    "note": "A value-position memo row that bails on equal props (memo-wall wall B's one_change_B shape) adds no root-journal slot. Entering the de-opt item's own render journaled its inputs and its render, 8 slots per bailed row; render probes, host identity, and the one changed row are checked in the same run."
+  },
+  {
+    "suite": "memo-wall",
+    "op": "bailed_row_calls",
+    "target": "survivor-work",
+    "reference": "survivor-work-budget",
+    "maxRatio": 1,
+    "note": "Production-bundle calls per bailed value-position memo row, from jitless precise coverage: 26 to create and key the descriptor, visit the survivor, and take the memo bail. Entering the de-opt item's own render (renderBlock, deoptItemBody, a nested childSlot) cost 48. Same semantic controls as bailed_row_journal_slots."
+  },
+  {
+    "suite": "memo-wall",
     "op": "mount",
     "target": "octane-tsrx",
     "reference": "react",
