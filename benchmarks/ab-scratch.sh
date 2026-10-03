@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT=$PWD
 OUT=$ROOT/benchmarks/results
 mkdir -p "$OUT"
-ITER=${AB_ITER:-9}
+ITER=${AB_ITER:-15}
 
 wait_port() {
 	for _ in $(seq 1 240); do
@@ -41,11 +41,9 @@ COMMITS=(
 	"p833 6927595656860f12fef79948135f5f1ee29595c2"
 	"p1069 1ed5d2ab9c6291b734a70a102c78b25c8bcdb3d1"
 	"main dc3e180236a5d55fb1288ef8738ace52870ef891"
-	"E2 df6a6af4ed53d2caf716db0f77d553cb5e52c4dd"
-	"E3 f8db9ba22c40fc4bed50a5141ff0777b97adf68c"
-	"R1 0c3c63ff5173b996f53aa416e89f9f681d6d3c89"
-	"R0a e7fa3cf571f7d08c4af29153134fae4b74d64b4f"
-	"R0b 84087513b30ed6708f04e9b46b8175b1887481da"
+	"fix1069 eb910c7ff52fa6fc0c330e489621def0ba2b8ba3"
+	"fix833 f10c630f2ffe5368d395a63e10181e9b840a0c99"
+	"both d6591cb3143824660f1ac7f9631845dd20908bbd"
 )
 SVG_OLD=7a6fba3aef8a0bb1c9f5a01ca00bbcec0e4aa6f1
 
