@@ -2531,7 +2531,7 @@ interface NativeTransitionTypes {
 	Thenable: TrackedThenable;
 	Suspense: SuspenseException;
 	Capture: OffscreenCapture;
-	RootFrame: RootRenderFrame;
+	RootFrame: RootRenderTransaction;
 	MemoSwap: TransitionMemoSwap;
 	Value: NativeTransitionUpdate['slot']['value'];
 }
@@ -3722,6 +3722,8 @@ interface RootRenderOwner {
 	/** Only roots participating in a native candidate retain cancellation ownership. */
 	nativeTransitions?: Set<TransitionActionBatch>;
 	transaction: RootRenderTransaction | null;
+	/** An emptied, committed shell for this root's next wave (recycleRootTransaction). */
+	spareTransaction: RootRenderTransaction | null;
 	/** Installed only when a single-origin transition suspends at this root. */
 	transition?: RootTransitionHold;
 	disposed: boolean;
@@ -3742,21 +3744,11 @@ interface RootRenderTransaction {
 	parked: ParkedItem[] | null;
 	aborted: boolean;
 	rootRequest: boolean;
+	/** Something outside this wave keeps the transaction or its capture. */
+	retained: boolean;
 	hydrating?: boolean;
 	/** Collectively validated before a native candidate published canonical state. */
 	nativeAdmitted?: boolean;
-}
-
-interface RootRenderFrame {
-	transaction: RootRenderTransaction;
-	previous: RootRenderTransaction | null;
-	log: any[] | null;
-	bags: Map<object, number> | null;
-	checkpoint: number;
-	bagWindow: number;
-	depth: number;
-	parked: ParkedItem[] | null;
-	capture: OffscreenCapture | null;
 }
 
 // A root can discover its first suspension after any earlier sibling write.
@@ -3768,6 +3760,15 @@ let ROOT_RENDER_TRANSACTION: RootRenderTransaction | null = null;
 let ROOT_RENDER_TRANSACTIONS: RootRenderTransaction[] = [];
 let ROOT_RENDER_ROLLBACK = false;
 let NEXT_ROOT_RENDER_CREATED_STAMP = 0;
+let SPARE_ROOT_RENDER_TRANSACTIONS: RootRenderTransaction[] | null = null;
+/**
+ * The globals each open root window replaces, eight slots per window. Windows
+ * nest strictly (every beginRootRender is closed by its endRootRender), so one
+ * stack replaces a saved frame object per window.
+ */
+const ROOT_RENDER_WINDOWS: unknown[] = [];
+/** Work list for recycleRootTransaction, kept so recycling allocates nothing. */
+const RECYCLED_QUEUES: unknown[][] = [];
 
 /** @internal Opaque retry episode, without retaining an abandoned Scope. */
 export function getRootRenderRetryKey(scope: Scope, retryOnly = false): object | null {
@@ -3777,7 +3778,8 @@ export function getRootRenderRetryKey(scope: Scope, retryOnly = false): object |
 	return (owner.retryKey ??= {});
 }
 
-function beginRootRender(owner: RootRenderOwner | undefined): RootRenderFrame | null {
+/** Open a window on `owner`'s transaction; null when that window is already open. */
+function beginRootRender(owner: RootRenderOwner | undefined): RootRenderTransaction | null {
 	if (
 		owner === undefined ||
 		(ROOT_RENDER_TRANSACTION === owner.transaction && ROOT_RENDER_TRANSACTION !== null)
@@ -3786,38 +3788,44 @@ function beginRootRender(owner: RootRenderOwner | undefined): RootRenderFrame | 
 	let transaction = owner.transaction;
 	if (transaction === null) {
 		owner.nativeRetry?.clear();
-		const capture = createOffscreenCapture();
-		capture.rootTransaction = true;
-		transaction = {
-			owner,
-			log: [],
-			bags: new Map(),
-			capture,
-			created: null,
-			createdStamp: ++NEXT_ROOT_RENDER_CREATED_STAMP,
-			bagWindow: ++NEXT_TRANSITION_JOURNAL_BAG_WINDOW,
-			retainedCreated: null,
-			retired: null,
-			structures: null,
-			commit: null,
-			parked: null,
-			aborted: false,
-			rootRequest: false,
-		};
+		transaction = owner.spareTransaction;
+		if (transaction !== null) {
+			// Fresh stamps keep the previous wave's Blocks and bag snapshots apart.
+			owner.spareTransaction = null;
+			transaction.createdStamp = ++NEXT_ROOT_RENDER_CREATED_STAMP;
+			transaction.bagWindow = ++NEXT_TRANSITION_JOURNAL_BAG_WINDOW;
+			transaction.rootRequest = false;
+		} else
+			transaction = {
+				owner,
+				log: [],
+				bags: new Map(),
+				capture: createOffscreenCapture(true),
+				created: null,
+				createdStamp: ++NEXT_ROOT_RENDER_CREATED_STAMP,
+				bagWindow: ++NEXT_TRANSITION_JOURNAL_BAG_WINDOW,
+				retainedCreated: null,
+				retired: null,
+				structures: null,
+				commit: null,
+				parked: null,
+				aborted: false,
+				rootRequest: false,
+				retained: false,
+			};
 		owner.transaction = transaction;
 		ROOT_RENDER_TRANSACTIONS.push(transaction);
 	}
-	const frame: RootRenderFrame = {
-		transaction,
-		previous: ROOT_RENDER_TRANSACTION,
-		log: TRANSITION_JOURNAL,
-		bags: TRANSITION_JOURNAL_BAGS,
-		checkpoint: TRANSITION_JOURNAL_CHECKPOINT,
-		bagWindow: TRANSITION_JOURNAL_BAG_WINDOW,
-		depth: TRANSITION_JOURNAL_DEPTH,
-		parked: PARKED_ITEMS,
-		capture: WIP_CAPTURE,
-	};
+	ROOT_RENDER_WINDOWS.push(
+		ROOT_RENDER_TRANSACTION,
+		TRANSITION_JOURNAL,
+		TRANSITION_JOURNAL_BAGS,
+		TRANSITION_JOURNAL_CHECKPOINT,
+		TRANSITION_JOURNAL_BAG_WINDOW,
+		TRANSITION_JOURNAL_DEPTH,
+		PARKED_ITEMS,
+		WIP_CAPTURE,
+	);
 	DEFERRED_LAYOUT_DRIVER?.recordRootTransaction(transaction);
 	ROOT_RENDER_TRANSACTION = transaction;
 	TRANSITION_JOURNAL = transaction.log;
@@ -3827,20 +3835,22 @@ function beginRootRender(owner: RootRenderOwner | undefined): RootRenderFrame | 
 	TRANSITION_JOURNAL_DEPTH = 1;
 	PARKED_ITEMS = transaction.parked;
 	WIP_CAPTURE = transaction.capture;
-	return frame;
+	return transaction;
 }
 
-function endRootRender(frame: RootRenderFrame | null): void {
-	if (frame === null) return;
-	frame.transaction.parked = PARKED_ITEMS;
-	ROOT_RENDER_TRANSACTION = frame.previous;
-	TRANSITION_JOURNAL = frame.log;
-	TRANSITION_JOURNAL_BAGS = frame.bags;
-	TRANSITION_JOURNAL_CHECKPOINT = frame.checkpoint;
-	TRANSITION_JOURNAL_BAG_WINDOW = frame.bagWindow;
-	TRANSITION_JOURNAL_DEPTH = frame.depth;
-	PARKED_ITEMS = frame.parked;
-	WIP_CAPTURE = frame.capture;
+/** Close the window beginRootRender opened, restoring the globals it replaced. */
+function endRootRender(transaction: RootRenderTransaction | null): void {
+	if (transaction === null) return;
+	transaction.parked = PARKED_ITEMS;
+	const windows = ROOT_RENDER_WINDOWS;
+	WIP_CAPTURE = windows.pop() as OffscreenCapture | null;
+	PARKED_ITEMS = windows.pop() as ParkedItem[] | null;
+	TRANSITION_JOURNAL_DEPTH = windows.pop() as number;
+	TRANSITION_JOURNAL_BAG_WINDOW = windows.pop() as number;
+	TRANSITION_JOURNAL_CHECKPOINT = windows.pop() as number;
+	TRANSITION_JOURNAL_BAGS = windows.pop() as Map<object, number> | null;
+	TRANSITION_JOURNAL = windows.pop() as any[] | null;
+	ROOT_RENDER_TRANSACTION = windows.pop() as RootRenderTransaction | null;
 }
 
 function journalUndo(undo: () => void): void {
@@ -4228,10 +4238,12 @@ function retireDetachedBindingLeases(owner: RootRenderOwner): void {
 function commitRootRenders(): void {
 	const transactions = ROOT_RENDER_TRANSACTIONS;
 	if (transactions.length === 0) return;
-	ROOT_RENDER_TRANSACTIONS = [];
+	ROOT_RENDER_TRANSACTIONS = SPARE_ROOT_RENDER_TRANSACTIONS ?? [];
+	SPARE_ROOT_RENDER_TRANSACTIONS = null;
 	for (const transaction of transactions) {
 		const owner = transaction.owner;
 		const finishStagedOwner = DEFERRED_LAYOUT_DRIVER?.enterRootCommit(owner);
+		let committed = false;
 		try {
 			if (transaction.aborted || owner.disposed) {
 				if (owner.transaction === transaction) owner.transaction = null;
@@ -4316,10 +4328,69 @@ function commitRootRenders(): void {
 			// Outgoing cleanup may have removed the state origin of a held root
 			// transition. Inspect its lifetime after those deletions have completed.
 			if (owner.transition !== undefined) TRANSITION_SWAP_DRIVER!.commitRoot(owner, transaction);
+			// A staged native acceptance still reads this capture when it publishes.
+			committed = !deferredNativeAcceptance;
 		} finally {
 			finishStagedOwner?.();
 		}
+		if (committed) recycleRootTransaction(transaction);
 	}
+	// Popping keeps the list's backing store for the next wave.
+	while (transactions.length !== 0) transactions.pop();
+	SPARE_ROOT_RENDER_TRANSACTIONS = transactions;
+}
+
+/**
+ * Keep a committed wave's emptied shell (record, log, bag map, capture and its
+ * queues) for the same root's next wave, so an ordinary update allocates none
+ * of them. Nothing may reach the shell once it is reused, so a wave is skipped
+ * when its transaction or capture can outlive this commit: a deferred-layout or
+ * preserved-activation reference (`retained`), a hydration attempt, a native
+ * admission, binding-lease presentation receipts, a staged commit, or an open
+ * root window or native admission that is still using it. Native reads qualify:
+ * accepting the capture released its candidates, and receipts key the entries.
+ */
+function recycleRootTransaction(transaction: RootRenderTransaction): void {
+	const capture = transaction.capture;
+	if (
+		transaction.retained ||
+		transaction.hydrating ||
+		transaction.nativeAdmitted ||
+		transaction.owner.bindingLeases !== undefined ||
+		ROOT_RENDER_TRANSACTION !== null ||
+		STAGED_COMMIT_CAPTURE !== null ||
+		NATIVE_TRANSITION_ATTEMPT !== null
+	)
+		return;
+	if (transaction.bags.size !== 0) transaction.bags.clear();
+	transaction.created =
+		transaction.retainedCreated =
+		transaction.retired =
+		transaction.structures =
+		transaction.commit =
+		transaction.parked =
+			null;
+	// The splice already moved the capture's work into the live queues. Popping
+	// keeps a short queue's backing store for the next wave, where `length = 0`
+	// would release it; a long queue is released rather than retained.
+	const effects = capture.effects;
+	RECYCLED_QUEUES.push(
+		transaction.log,
+		effects[INSERTION],
+		effects[LAYOUT],
+		effects[PASSIVE],
+		capture.events,
+		capture.eventActions,
+		capture.refs,
+		capture.stores,
+	);
+	while (RECYCLED_QUEUES.length !== 0) {
+		const queue = RECYCLED_QUEUES.pop()!;
+		if (queue.length > 64) queue.length = 0;
+		else while (queue.length !== 0) queue.pop();
+	}
+	capture.detaches = capture.suspenseCommits = undefined;
+	transaction.owner.spareTransaction = transaction;
 }
 
 function suspendRootRender(
@@ -6729,9 +6800,9 @@ export function scheduleRenderCleanup(
 	}
 }
 
-function createOffscreenCapture(): OffscreenCapture {
+function createOffscreenCapture(rootTransaction = false): OffscreenCapture {
 	return {
-		rootTransaction: false,
+		rootTransaction,
 		renderRoot: null,
 		renderedBlocks: null,
 		effects: [[], [], []],
@@ -9468,7 +9539,10 @@ function ensureDeferredLayoutDriver(): void {
 			},
 			recordRootTransaction(transaction) {
 				const capture = DEFERRED_LAYOUT_CAPTURE;
-				if (capture !== null) (capture.transactions ??= new Set()).add(transaction);
+				if (capture !== null) {
+					(capture.transactions ??= new Set()).add(transaction);
+					transaction.retained = true;
+				}
 			},
 			stageDelegation(target, root, register) {
 				const capture = STAGED_COMMIT_CAPTURE;
@@ -15069,6 +15143,8 @@ function preserveSuspendedHydrateActivation(
 ): void {
 	const thenable = suspension.thenable;
 	const suspendedBlock = findSuspendedHydrateBlock(state.block, thenable);
+	// The activation resumes into this capture later; a root shell cannot be reused.
+	if (ROOT_RENDER_TRANSACTION?.capture === WIP_CAPTURE) ROOT_RENDER_TRANSACTION!.retained = true;
 	const activation: PreservedHydrateActivation = {
 		hydration,
 		thenable,
@@ -39203,7 +39279,7 @@ function teardownErrorSlot(state: ErrorSlot, detachDom: boolean): void {
 }
 
 /** Detached retry/error callbacks still publish through the owning root journal. */
-function beginDetachedBoundaryRender(state: TrySlot | ErrorSlot): RootRenderFrame | null {
+function beginDetachedBoundaryRender(state: TrySlot | ErrorSlot): RootRenderTransaction | null {
 	const frame =
 		WIP_CAPTURE === null ? beginRootRender(state.parentBlock.idState.renderOwner) : null;
 	if (ROOT_RENDER_TRANSACTION !== null && !ROOT_RENDER_ROLLBACK) {
@@ -39217,7 +39293,7 @@ function beginDetachedBoundaryRender(state: TrySlot | ErrorSlot): RootRenderFram
 	return frame;
 }
 
-function endDetachedBoundaryRender(frame: RootRenderFrame | null): void {
+function endDetachedBoundaryRender(frame: RootRenderTransaction | null): void {
 	if (frame === null) return;
 	endRootRender(frame);
 	// A catch reached from deletion cleanup can open a new transaction during
@@ -39593,7 +39669,7 @@ function switchErrorToCatch(
 	try {
 		switchErrorToCatchInner(state, error, reportInline, adoptedStart, adoptedEnd);
 	} catch (failure) {
-		if (frame !== null) rollbackRootRender(frame.transaction);
+		if (frame !== null) rollbackRootRender(frame);
 		throw failure;
 	} finally {
 		endDetachedBoundaryRender(frame);
@@ -40749,7 +40825,7 @@ function hideTryContentAndMountPending(
 	try {
 		return hideTryContentAndMountPendingInner(state, resumeThenable);
 	} catch (failure) {
-		if (frame !== null) rollbackRootRender(frame.transaction);
+		if (frame !== null) rollbackRootRender(frame);
 		throw failure;
 	} finally {
 		endDetachedBoundaryRender(frame);
@@ -42629,7 +42705,7 @@ function switchToCatch(
 	try {
 		switchToCatchInner(state, err, reportInline, adoptedStart, adoptedEnd);
 	} catch (failure) {
-		if (frame !== null) rollbackRootRender(frame.transaction);
+		if (frame !== null) rollbackRootRender(frame);
 		throw failure;
 	} finally {
 		endDetachedBoundaryRender(frame);
@@ -48118,6 +48194,7 @@ function makeRoot(
 		wakeable: null,
 		retryKey: null,
 		transaction: null,
+		spareTransaction: null,
 		disposed: false,
 	};
 	idState.renderOwner = renderOwner;
