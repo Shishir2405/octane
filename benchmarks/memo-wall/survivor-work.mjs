@@ -1,13 +1,17 @@
 // Deterministic per-row work of memo-wall's one_change_B shape: a plain-JS
 // helper re-creates a createElement(memo(Row), props) descriptor for every row,
-// the list reaches the DOM through a `{rows}` children hole, and one row's value
-// changes while the rest bail on equal props. Each count is the difference
-// between two list sizes divided by the extra rows, so per-commit constants
-// cancel and only the cost of one more bailed survivor remains.
+// the list reaches the DOM through a `{rows}` children hole under a theme
+// provider, every row's memo(Inner) holds a Leaf that reads the theme, and one
+// row's value changes while the rest bail on equal props. Each count is the
+// difference between two list sizes divided by the extra rows, so per-commit
+// constants cancel and only the cost of one more bailed survivor remains.
 //
 // - bailed_row_journal_slots: root-journal slots the commit holds per bailed row.
 // - bailed_row_calls: production-bundle function calls per bailed row, from V8
 //   precise call coverage in a --jitless process (inlining cannot hide a call).
+// - bailed_row_restamp_visits: ancestors restampCtxDeps visits per bailed row
+//   while it merges the row's theme read onto memo/armed ancestors. Wall B has
+//   none above its rows, so the walk has nothing to visit.
 //
 // Usage: node survivor-work.mjs [runtime.ts], where the optional runtime source
 // replaces packages/octane/src/runtime.ts for an old-vs-new comparison.
@@ -40,24 +44,45 @@ const runtimeFile = path.resolve(process.argv[2] ?? runtimePath);
 const runtimeSource = fs.readFileSync(runtimeFile, 'utf8');
 const commitSite = 'ROOT_RENDER_TRANSACTIONS = [];\n\tfor (const transaction of transactions) {';
 assert.equal(runtimeSource.split(commitSite).length, 2, 'one root commit loop');
-const observedRuntime = runtimeSource.replace(
-	commitSite,
-	commitSite + '\n\t\tglobalThis.__rootJournalSlots += transaction.log.length;',
-);
+const restampLoop =
+	/\nfunction restampCtxDeps\(block: Block\): void \{\n[^]*?\n\tfor \(let b: Block \| null = block\.parentBlock;[^\n]*\) \{/;
+assert.match(runtimeSource, restampLoop, 'one restampCtxDeps ancestor loop');
+const observedRuntime = runtimeSource
+	.replace(
+		commitSite,
+		commitSite + '\n\t\tglobalThis.__rootJournalSlots += transaction.log.length;',
+	)
+	.replace(restampLoop, (loop) => loop + '\n\t\tglobalThis.__restampVisits++;');
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const exportsMap = JSON.parse(
 	fs.readFileSync(path.join(repo, 'packages/octane/package.json')),
 ).exports;
 
-// Row mirrors memo-wall's wall B: four primitive props and a module callback.
-const rowSource = `import { memo } from 'octane';
+// Row mirrors memo-wall's wall B: four primitive props and a module callback,
+// and the memo(Inner) → Leaf chain whose Leaf reads the wall's theme.
+const rowSource = `import { createContext, memo, use } from 'octane';
+const Theme = createContext('t0');
+function Leaf() @{
+	globalThis.__leafRenders++;
+	const theme = use(Theme);
+	<i>{theme as string}</i>
+}
+function InnerImpl(props: { value: number }) @{
+	<b>{props.value as string}<Leaf /></b>
+}
+const Inner = memo(InnerImpl);
 function RowImpl(props: { id: number; label: string; value: number; wall: string; onSelect: () => void }) @{
 	globalThis.__rowRenders++;
-	<li data-id={props.id} onClick={props.onSelect}>{props.label + ':' + props.value + ':' + props.wall}</li>
+	<li data-id={props.id} onClick={props.onSelect}>
+		<span>{props.label + ':' + props.wall}</span>
+		<Inner value={props.value} />
+	</li>
 }
 export const Row = memo(RowImpl);
-export function Wall(props: { rows: unknown }) @{
-	<ul>{props.rows}</ul>
+export function Wall(props: { rows: unknown; theme: string }) @{
+	<Theme value={props.theme}>
+		<ul>{props.rows}</ul>
+	</Theme>
 }`;
 const helperSource = `import { createElement } from 'octane';
 import { Row } from './survivor-rows.tsrx';
@@ -174,34 +199,42 @@ try {
 			label: 'row ' + id,
 			value: id === changed ? -1 : id,
 		}));
-	const measured = { slots: {}, calls: {} };
+	const measured = { slots: {}, calls: {}, visits: {} };
 	let semantic;
 	for (const count of SIZES) {
 		const container = document.createElement('main');
 		document.body.append(container);
 		const root = createRoot(container);
 		try {
+			const render = (items) =>
+				flushSync(() => root.render(Wall, { rows: buildRows(items, onSelect), theme: 't0' }));
 			globalThis.__rowRenders = 0;
-			flushSync(() => root.render(Wall, { rows: buildRows(itemsOf(count), onSelect) }));
+			globalThis.__leafRenders = 0;
+			render(itemsOf(count));
 			assert.equal(globalThis.__rowRenders, count, 'mount renders every row');
+			assert.equal(globalThis.__leafRenders, count, 'mount renders every leaf');
 			const hosts = [...container.querySelectorAll('li')];
 			// Warm the update path once, so lazy one-time setup is not counted.
-			flushSync(() => root.render(Wall, { rows: buildRows(itemsOf(count), onSelect) }));
+			render(itemsOf(count));
 			globalThis.__rowRenders = 0;
+			globalThis.__leafRenders = 0;
 			globalThis.__rootJournalSlots = 0;
+			globalThis.__restampVisits = 0;
 			const items = itemsOf(count, CHANGED);
 			// Settle microtasks an earlier commit or unmount queued, then reset the counts.
 			await new Promise((resolve) => setImmediate(resolve));
 			await calls();
-			flushSync(() => root.render(Wall, { rows: buildRows(items, onSelect) }));
+			render(items);
 			measured.calls[count] = await calls();
 			measured.slots[count] = globalThis.__rootJournalSlots;
+			measured.visits[count] = globalThis.__restampVisits;
 			assert.equal(globalThis.__rowRenders, 1, 'only the changed row renders');
+			assert.equal(globalThis.__leafRenders, 1, 'only the changed row renders its leaf');
 			const after = [...container.querySelectorAll('li')];
 			assert.equal(after.length, count);
 			after.forEach((host, i) => assert.equal(host, hosts[i], 'rows keep their hosts'));
-			assert.equal(after[CHANGED].textContent, `row ${CHANGED}:-1:B`);
-			assert.equal(after[CHANGED + 1].textContent, `row ${CHANGED + 1}:${CHANGED + 1}:B`);
+			assert.equal(after[CHANGED].textContent, `row ${CHANGED}:B-1t0`);
+			assert.equal(after[CHANGED + 1].textContent, `row ${CHANGED + 1}:B${CHANGED + 1}t0`);
 			if (count === SIZES[1]) semantic = hash(container.innerHTML);
 		} finally {
 			root.unmount();
@@ -212,6 +245,7 @@ try {
 	const value = (median) => ({ median, min: median, samples: 1 });
 	const slotsPerRow = perRow(measured.slots);
 	const callsPerRow = perRow(measured.calls);
+	const visitsPerRow = perRow(measured.visits);
 	report = {
 		suite: 'memo-wall',
 		targets: [
@@ -220,15 +254,22 @@ try {
 				ops: {
 					bailed_row_journal_slots: value(slotsPerRow),
 					bailed_row_calls: value(callsPerRow),
+					bailed_row_restamp_visits: value(visitsPerRow),
 				},
 				meta: { gate: 'passed', measured, semantic },
 			},
 			{
-				// A row-scaled journal record is at least one slot per row. The 26
-				// calls create and key the descriptor, visit the survivor, and take
-				// the memo bail; entering the item's own render cost 48 and 8 slots.
+				// A row-scaled journal record is at least one slot per row, and a
+				// row-scaled walk at least one ancestor. The 26 calls create and key
+				// the descriptor, visit the survivor, and take the memo bail; entering
+				// the item's own render cost 48 and 8 slots. Walking every ancestor
+				// to the root for a memo/armed one cost 3 visits.
 				name: 'survivor-work-budget',
-				ops: { bailed_row_journal_slots: value(1), bailed_row_calls: value(26) },
+				ops: {
+					bailed_row_journal_slots: value(1),
+					bailed_row_calls: value(26),
+					bailed_row_restamp_visits: value(1),
+				},
 				meta: { gate: 'passed' },
 			},
 		],
@@ -239,7 +280,7 @@ try {
 			fixtureSha256: hash(rowSource + helperSource),
 			bundleSha256: hash(code),
 			limits:
-				'Counts root-journal slots and jitless production-bundle calls per bailed value-position memo row, as the difference between two list sizes in happy-dom; not timing.',
+				'Counts root-journal slots, jitless production-bundle calls and restampCtxDeps ancestor visits per bailed value-position memo row, as the difference between two list sizes in happy-dom; not timing.',
 		},
 	};
 	console.log(JSON.stringify(report, null, 2));

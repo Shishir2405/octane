@@ -2073,11 +2073,14 @@ export interface Block extends Scope {
 	extra: any;
 	outputHandler: OutputHandler | null;
 	/**
-	 * True when this block OR any ancestor is a `memo()` block. Monotone up the
-	 * parentBlock chain (computed once at creation), so `useContextInternal` can
-	 * skip its memo-ancestor stamping walk entirely on the common no-memo tree —
-	 * the walk only ever stamps memo blocks, so if there are none above us it is
-	 * pure overhead (~ancestor-depth iterations per `use()` call).
+	 * True whenever this block OR an ancestor is a context-stamping target: a
+	 * `memo()` body or an `$$implicitBail`-armed block. Inherited at creation and
+	 * never cleared, so a true block has a true subtree; a flag that outlives its
+	 * target (an HMR body swap) only lengthens a walk. A block that becomes a
+	 * target after it has descendants goes through `markMemoInChain`, which hands
+	 * the flag down. The dependency walks stamp only targets, so a context read
+	 * skips the common no-memo tree entirely, and restampCtxDeps stops at the
+	 * first ancestor without the flag.
 	 */
 	memoInChain: boolean;
 	pending: boolean;
@@ -16701,6 +16704,19 @@ function isHostContextRequest(err: unknown): err is HostContextRequestSignal {
 	);
 }
 
+// Make a live block a context-stamping target (see Block.memoInChain). Its
+// existing descendants were created without the flag. Without it, their reads
+// never stamp this block, and restampCtxDeps stops below it, so this block's
+// bail could strand a consumer under it. A descendant that already has the flag
+// has it for its whole subtree, so the walk only visits blocks that lack it.
+function markMemoInChain(scope: Scope): void {
+	if (scope.block === scope) {
+		if (scope.block.memoInChain) return;
+		scope.block.memoInChain = true;
+	}
+	forEachSubtreeChild(scope, markMemoInChain);
+}
+
 function recordContextDependency(block: Block | null, context: Context<any>): void {
 	if (block === null || !block.memoInChain) return;
 	(block.$$ctxDirect ??= new Map()).set(context, context.$$version);
@@ -18374,8 +18390,8 @@ export function lazy<C extends ComponentBody<any>>(
 			}
 			// The Block was created while the payload was unresolved, before it could
 			// inherit memo metadata. Arm context dependency stamping before executing
-			// the resolved memo body.
-			scope.block.memoInChain = true;
+			// the resolved memo body, including for anything an earlier body mounted.
+			markMemoInChain(scope.block);
 		}
 		if (
 			profiledComponent !== comp &&
@@ -31478,8 +31494,11 @@ function renderPortalState(
 	} else {
 		if (state.host !== host) journalRootProperty(state, 'host', state.host);
 		state.host = host;
-		if (state.block!.body !== norm.body)
+		if (state.block!.body !== norm.body) {
 			journalRootProperty(state.block!, 'body', state.block!.body);
+			// A raw function body swaps in place, and a memo one is a stamping target.
+			if ((norm.body as any).__memo === true) markMemoInChain(state.block!);
+		}
 		if (state.block!.props !== norm.props)
 			journalRootProperty(state.block!, 'props', state.block!.props);
 		if (state.block!.extra !== env) journalRootProperty(state.block!, 'extra', state.block!.extra);
@@ -35790,6 +35809,8 @@ function renderHostTagChildren(d: ElementDescriptor, block: Block, el: Element):
 			registerSlot(block, state);
 		} else {
 			state.block.body = kids as ComponentBody;
+			// A render prop may be a memo function, which makes this Block a stamping target.
+			if (!state.block.memoInChain && (kids as any).__memo === true) markMemoInChain(state.block);
 		}
 		renderBlock(state.block);
 		return;
@@ -37494,9 +37515,13 @@ export function childSlot(
 			const wasImplicitlyArmed = state.block.$$implicitBail;
 			if (taggedChildren && !wasImplicitlyArmed) {
 				// The slot previously hosted an arbitrary render function. Arm before
-				// rendering the tagged body so its context reads stamp this block.
+				// rendering the tagged body so its context reads stamp this block. The
+				// earlier body's subtree stays mounted, and its reads must stamp it too.
 				state.block.$$implicitBail = true;
-				state.block.memoInChain = true;
+				markMemoInChain(state.block);
+			} else if (!state.block.memoInChain && (comp as any).__memo === true) {
+				// A memo function swapped in as the body is a stamping target as well.
+				markMemoInChain(state.block);
 			}
 			if (
 				wasImplicitlyArmed &&
@@ -38282,14 +38307,15 @@ function tryImplicitBail(block: Block): boolean {
 // consumer lives below it and strands the consumer (a changed context would
 // never descend). Merge onto every memo/armed ancestor; prefer a STALE version
 // over a current one so a still-pending refresh can't be masked by a fresher
-// read of the same context elsewhere in the ancestor's subtree.
+// read of the same context elsewhere in the ancestor's subtree. Above the first
+// ancestor without memoInChain there is no memo/armed block to merge onto.
 function restampCtxDeps(block: Block): void {
 	const reads = block.$$ctxReads;
 	const direct = block.$$ctxDirect;
 	const hasReads = reads !== null && reads.size > 0;
 	const hasDirect = direct !== null && direct.size > 0;
 	if (!hasReads && !hasDirect) return;
-	for (let b: Block | null = block.parentBlock; b !== null; b = b.parentBlock) {
+	for (let b: Block | null = block.parentBlock; b !== null && b.memoInChain; b = b.parentBlock) {
 		if ((b.body as any)?.__memo !== true && b.$$implicitBail !== true) continue;
 		const m = (b.$$ctxReads ??= new Map());
 		if (hasReads) {

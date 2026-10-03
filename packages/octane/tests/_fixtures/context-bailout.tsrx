@@ -202,3 +202,33 @@ export function AppInterleaved(props) @{
 		</Ctx>
 	</div>
 }
+
+// ---------------------------------------------------------------------------
+// Case F — Case E with a plain component between the two memo boundaries. The
+// bailed inner boundary's context deps have to reach the outer one THROUGH the
+// plain component, which re-rendered with the outer boundary.
+// ---------------------------------------------------------------------------
+function PlainMiddle() @{
+	log('PlainMiddle');
+	<section class="middle">
+		<InnerPure />
+	</section>
+}
+
+function OuterThroughImpl(props: { label: string }) @{
+	log('OuterThrough:' + props.label);
+	<div class="outer">
+		<span class="label">{props.label as string}</span>
+		<PlainMiddle />
+	</div>
+}
+const OuterThrough = memo(OuterThroughImpl);
+
+export function AppInterleavedThrough(props: { value: number; label: string }) @{
+	log('App');
+	<div id="app-interleaved-through">
+		<Ctx value={props.value}>
+			<OuterThrough label={props.label} />
+		</Ctx>
+	</div>
+}

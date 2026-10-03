@@ -6,6 +6,7 @@ import {
 	AppSiblings,
 	AppList,
 	AppInterleaved,
+	AppInterleavedThrough,
 	setSink,
 } from '../_fixtures/context-bailout.tsrx';
 
@@ -158,6 +159,27 @@ describe('context propagation: bailout heuristics', () => {
 		// Now ONLY the context changes → OuterWrap and InnerPure both bail; the
 		// consumer must still refresh (React: bailouts never sever propagation).
 		r.update(AppInterleaved, { value: 1, label: 'b' });
+		expect(log).toEqual(['App', 'DeepConsumer:1']);
+		expect(r.find('.deep').textContent).toBe('1');
+		r.unmount();
+		setSink(null);
+	});
+
+	// The same interleave with a plain, non-memo component between OuterThrough
+	// and InnerPure: the plain layer re-renders with its parent, so the bailed
+	// InnerPure's deps must still reach OuterThrough across it.
+	it('a consumer is not stranded when a plain component sits between the bailed boundaries', () => {
+		const log: string[] = [];
+		setSink((s) => log.push(s));
+		const r = mount(AppInterleavedThrough, { value: 0, label: 'a' });
+		expect(log).toEqual(['App', 'OuterThrough:a', 'PlainMiddle', 'InnerPure', 'DeepConsumer:0']);
+		log.length = 0;
+
+		r.update(AppInterleavedThrough, { value: 0, label: 'b' });
+		expect(log).toEqual(['App', 'OuterThrough:b', 'PlainMiddle']);
+		log.length = 0;
+
+		r.update(AppInterleavedThrough, { value: 1, label: 'b' });
 		expect(log).toEqual(['App', 'DeepConsumer:1']);
 		expect(r.find('.deep').textContent).toBe('1');
 		r.unmount();
