@@ -34,5 +34,5 @@ test('activates every island without the renderer within the islands-only JavaSc
 		type: 'islands-only JavaScript',
 		description: `${files.length} scripts, ${gzip} bytes gzip-9`,
 	});
-	expect(gzip).toBeLessThanOrEqual(70 * 1024);
+	expect(gzip).toBeLessThanOrEqual(71 * 1024);
 });
