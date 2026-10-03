@@ -255,7 +255,11 @@ export function analyzeReport({
 		if (SUITE_INFO[suite]?.workGate && larger.length) {
 			failures.push(`❌ ${suite}: ${larger.length} work counter(s) increased`);
 		} else if (larger.length) {
-			notes.push(`🔴 ${suite}: ${larger.length} value(s) increased within budget`);
+			const breachSet = new Set(breaches.map((b) => `${b.target}\0${b.op}`));
+			const withinBudget = larger.filter((row) => !breachSet.has(`${row.target}\0${row.op}`));
+			if (withinBudget.length) {
+				notes.push(`🔴 ${suite}: ${withinBudget.length} value(s) increased within budget`);
+			}
 		}
 		const slower = timing.filter((row) => row.verdict === 'slower').length;
 		if (slower) notes.push(`🟡 ${suite}: ${slower} timed operation(s) slower beyond ±3%`);

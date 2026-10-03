@@ -175,8 +175,11 @@ const parityFor = (op, repeat) => {
 // freshly built rows instead.
 async function prepare(page, op) {
 	if (op.name === 'update') {
-		await page.evaluate(() => document.getElementById('run').click());
-		await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 1000, null, {
+		await page.evaluate(() => {
+			const btn = document.getElementById('clear');
+			if (btn) btn.click();
+		});
+		await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 0, {
 			timeout: 5000,
 		});
 	}
