@@ -35309,20 +35309,14 @@ function updateDeoptComponent(block: Block, item: any): boolean {
 		block.body !== deoptItemBody ||
 		block.extra !== block.forSlot!.env ||
 		slot!.__kind !== 'childSlot' ||
-		slot!.currentIsBodyFn ||
-		slot!.portal !== null ||
 		slot!.forSlot !== null ||
-		slot!.end === null ||
 		slot!.implicitSignal !== undefined ||
-		item === null ||
-		typeof item !== 'object' ||
-		item.$$kind !== ELEMENT_TAG ||
+		item?.$$kind !== ELEMENT_TAG ||
 		block.pending ||
 		block.pendingMode !== null ||
 		block.renderStatus !== RENDER_VALID ||
 		block.deoptNode !== null ||
 		block.$$ctxDirect !== null ||
-		block.$$ctxReads !== null ||
 		NATIVE_READ_DRIVER !== null ||
 		(WIP_CAPTURE !== null && WIP_CAPTURE.rootTransaction !== true) ||
 		signalDocumentEnabled ||
