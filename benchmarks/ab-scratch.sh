@@ -38,14 +38,12 @@ SVG=octane-tsrx-svg-dashboard-bench
 
 # name sha
 COMMITS=(
-	"o639 73b22fd1185db202f218e1a7e9e230571ef01c30"
 	"p833 6927595656860f12fef79948135f5f1ee29595c2"
-	"c833 5f7a4579bab1a9987cb54fb6b2fc1f314497fc3c"
-	"p1057 43568efdbdb058f825b8e174c9a4fdebefcacdc5"
-	"c1057 2789eab27ced3e2519cba4508b8e6aa9e728a3eb"
 	"p1069 1ed5d2ab9c6291b734a70a102c78b25c8bcdb3d1"
-	"c1069 5ead1ff2c000f3bb322e7d4fd1d5786161195189"
-	"main 421287457cf834629f67436fc313ec8cc82f1d7b"
+	"main dc3e180236a5d55fb1288ef8738ace52870ef891"
+	"E1 3a1d263aed83542f7a5b3b248ac4e8bf95c4b57e"
+	"E2 df6a6af4ed53d2caf716db0f77d553cb5e52c4dd"
+	"R1 0c3c63ff5173b996f53aa416e89f9f681d6d3c89"
 )
 SVG_OLD=7a6fba3aef8a0bb1c9f5a01ca00bbcec0e4aa6f1
 
@@ -78,9 +76,6 @@ for entry in "${COMMITS[@]}"; do
 	fi
 	i=$((i + 1))
 done
-tree $SVG_OLD $SVG
-serve "/tmp/at-$SVG_OLD/benchmarks/svg-dashboard/octane-tsrx" 7299
-SVG_T="$SVG_T,{\"name\":\"o635\",\"url\":\"http://localhost:7299/\"}"
 
 TARGETS="[$JS_T]" BENCH_JSON="$OUT/js-framework-reorder-attrib.json" node benchmarks/js-framework/run-reorder.mjs "$ITER" || echo "reorder exited $?"
 TARGETS="[$MW_T]" BENCH_JSON="$OUT/memo-wall-attrib.json" node benchmarks/memo-wall/run.mjs "$ITER" || echo "memo-wall exited $?"
