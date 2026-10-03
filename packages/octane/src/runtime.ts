@@ -380,6 +380,12 @@ export interface Scope {
 	block: Block;
 	parent: Scope | null;
 	/**
+	 * An event handler published this scope as its signal authority. Deletion then
+	 * records retirement for a scope that never resolved an owner, so a handler
+	 * queued past the deletion cannot mint fresh instance state for it.
+	 */
+	signalTokenEscaped: boolean;
+	/**
 	 * Hook slot map. Lazily allocated on the first hook call via `ensureHooks`.
 	 * For-of item bodies that never call a hook (the common case in
 	 * js-framework-benchmark-shaped lists) keep this as `null` for their
@@ -4183,13 +4189,8 @@ function rollbackRootRender(transaction: RootRenderTransaction): void {
 					undoCreatedInRootRender(transaction.log[i + 1], transaction.log[i + 2]);
 				else if (transaction.log[i] === JOURNAL_RETIRED)
 					transaction.log[i + 1].delete(transaction.log[i + 2]);
-				else if (transaction.log[i] === JOURNAL_EVENT_OWNER) {
-					const owners = transaction.log[i + 1];
-					const el = transaction.log[i + 2];
-					const previous = transaction.log[i + 3];
-					if (previous === undefined) owners.delete(el);
-					else owners.set(el, previous);
-				}
+				else if (transaction.log[i] === JOURNAL_EVENT_OWNER)
+					transaction.log[i + 1].$$signalOwner = transaction.log[i + 2];
 			}
 			transaction.log.length = 0;
 		}
@@ -5079,8 +5080,7 @@ function rollbackTransitionJournal(checkpoint: number, owner: Block): void {
 					target();
 					break;
 				case JOURNAL_EVENT_OWNER:
-					if (b === undefined) target.delete(a);
-					else target.set(a, b);
+					target.$$signalOwner = a;
 					break;
 				default:
 					// Spread snapshots include enumerable symbols as well as strings.
@@ -10567,6 +10567,7 @@ class BlockImpl {
 	declare signalInstanceValue: unknown;
 	declare signalInstanceHasKey: boolean;
 	declare signalInstanceResolved: string | undefined;
+	declare signalTokenEscaped: boolean;
 	declare $$ctxValues: Map<Context<any>, any> | null;
 	// Contexts whose value this block's subtree consumes — stamped on this block
 	// AND its memo ancestors by useContextInternal. The TRANSITIVE signal: a
@@ -10722,6 +10723,7 @@ class BlockImpl {
 		this.signalInstanceValue = undefined;
 		this.signalInstanceHasKey = false;
 		this.signalInstanceResolved = undefined;
+		this.signalTokenEscaped = false;
 	}
 }
 
@@ -10759,6 +10761,7 @@ class ScopeImpl {
 	declare signalInstanceValue: unknown;
 	declare signalInstanceHasKey: boolean;
 	declare signalInstanceResolved: string | undefined;
+	declare signalTokenEscaped: boolean;
 
 	constructor(parent: Scope, block: Block) {
 		this.block = block;
@@ -10781,6 +10784,7 @@ class ScopeImpl {
 		this.signalInstanceValue = undefined;
 		this.signalInstanceHasKey = false;
 		this.signalInstanceResolved = undefined;
+		this.signalTokenEscaped = false;
 	}
 }
 
@@ -12302,7 +12306,10 @@ function runScopeCleanups(scope: Scope, retireUnowned: boolean): void {
 		if (retireUnowned) SCOPE_SIGNAL_OWNERS.set(scope, null);
 		else SCOPE_SIGNAL_OWNERS.delete(scope);
 		retireRendererSignalOwner(signalOwner);
-	} else if (retireUnowned && signalOwner === false) {
+	} else if (
+		retireUnowned &&
+		(signalOwner === false || (signalOwner === undefined && scope.signalTokenEscaped))
+	) {
 		if (
 			STAGED_COMMIT_CAPTURE !== null &&
 			DEFERRED_LAYOUT_DRIVER!.stageAction(() => retireUnownedSignalScope(scope), true)
@@ -12316,7 +12323,8 @@ function retireUnownedSignalScope(scope: Scope): void {
 	// Resolve at publication, after deferred cleanups which may read the first
 	// handle. Null records retirement without allocating speculative authority.
 	const owner = SCOPE_SIGNAL_OWNERS.get(scope);
-	if (owner === false) SCOPE_SIGNAL_OWNERS.set(scope, null);
+	if (owner === false || (owner === undefined && scope.signalTokenEscaped))
+		SCOPE_SIGNAL_OWNERS.set(scope, null);
 	else if (owner) {
 		SCOPE_SIGNAL_OWNERS.set(scope, null);
 		retireRendererSignalOwner(owner);
@@ -22928,8 +22936,10 @@ export function presentationWrite<T>(
 	if (kind === 'setEventHandler') {
 		preparePresentationOperation(frame, prepared[0], 'event:' + prepared[1], () => {
 			writer(...prepared);
-			if (SIGNAL_BINDINGS_ENABLED || signalDocumentEnabled)
-				(SIGNAL_EVENT_OWNERS ??= new WeakMap()).set(prepared[0], frame.scope as ScopeImpl);
+			if (SIGNAL_BINDINGS_ENABLED || signalDocumentEnabled) {
+				SIGNAL_EVENT_OWNERS_RECORDED = true;
+				prepared[0].$$signalOwner = frame.scope as ScopeImpl;
+			}
 		});
 		return undefined as T;
 	}
@@ -23887,13 +23897,14 @@ export function bindSignalText(
 	// signal token must still re-enter the read path even when its handle is
 	// unchanged, so pending/error recovery is not hidden by this scalar guard.
 	// A supplied previousValue may itself be undefined, so count arguments.
-	if (
-		previous instanceof Text &&
-		arguments.length > 6 &&
-		previousValue === value &&
-		!isSignalHandle(value)
-	)
+	if (previous instanceof Text && !isSignalHandle(value)) {
+		if (arguments.length > 6 && previousValue === value) return previous;
+		// A scalar over the Text this hole already owns is bindDirectSignal's
+		// unbound scalar write without its policy dispatch. setText journals the
+		// text and this binding bag.
+		setText(previous, value);
 		return previous;
+	}
 	if (previous === undefined && bindingMarker !== undefined) {
 		const existing = activeHydration() !== null ? getNextSibling(position) : null;
 		previous = bindingText(
@@ -27683,14 +27694,18 @@ function isUsableEventSlot(slot: EventSlot): boolean {
 // a direct guard avoids an idle projection call or an ordinary self-assignment.
 // A live scope token already captures unchanged authority. Explicit/environment
 // and document owners still refresh it; staged updates must publish in order
-// even when the committed map matches, because an earlier owner write may be pending.
+// even when the committed owner matches, because an earlier owner write may be pending.
 // ---------------------------------------------------------------------------
 
 // Data equality skips dispatch/journal snapshots, never authority publication:
 // a stable callback can move to another owner without changing its captures.
 // Compare staged fields first and keep array-reference semantics for arity N.
 const EMPTY_ARGS: any[] = [];
-let SIGNAL_EVENT_OWNERS: WeakMap<Element, SignalOwner | ScopeImpl | BlockImpl> | null = null;
+type SignalEventOwner = SignalOwner | ScopeImpl | BlockImpl;
+// Event authority lives on the host beside its handler slots, so publishing it
+// for each mounted row is a property write rather than a weak-map insertion.
+// The flag keeps documents that never record authority off the dispatch read.
+let SIGNAL_EVENT_OWNERS_RECORDED = false;
 
 // Epoch of this task's first removed host root (retireEventHostTree); 0 when none
 // is pending. Older stamps belong to nodes already detached and are ignored.
@@ -27747,7 +27762,7 @@ export function setEventHandler(el: Element, key?: string, handler?: any): void 
 		SIGNAL_BINDINGS_ENABLED ||
 		signalDocumentEnabled ||
 		explicitOwner !== null ||
-		SIGNAL_EVENT_OWNERS !== null
+		SIGNAL_EVENT_OWNERS_RECORDED
 	) {
 		// Retain the precise invocation for an event-only reader whose signal
 		// module may arrive later. No owner or wrapper is allocated speculatively.
@@ -27762,27 +27777,24 @@ export function setEventHandler(el: Element, key?: string, handler?: any): void 
 			// Mark that a scope token escaped before queuing publication. A staged
 			// event may be followed by deletion in the same preparation; recording
 			// only at publication would miss that retirement. Discard leaves only
-			// conservative weak metadata, never an owner or signal state.
-			if (
-				(owner instanceof ScopeImpl || owner instanceof BlockImpl) &&
-				SCOPE_SIGNAL_OWNERS.get(owner) === undefined
-			)
-				SCOPE_SIGNAL_OWNERS.set(owner, false);
+			// this conservative flag, never an owner or signal state.
+			if ((owner instanceof ScopeImpl || owner instanceof BlockImpl) && !owner.signalTokenEscaped)
+				owner.signalTokenEscaped = true;
 			// Later writers must replace explicit authority with the usual scope
 			// token, including when both writers are still waiting for publication.
-			const owners = (SIGNAL_EVENT_OWNERS ??= new WeakMap());
+			SIGNAL_EVENT_OWNERS_RECORDED = true;
 			// Compare queued writes at publication: an earlier preparation may
 			// replace even the authority that is currently committed.
 			if (STAGED_COMMIT_CAPTURE !== null)
 				DEFERRED_LAYOUT_DRIVER!.stageAction(() => {
-					if (owners.get(el) !== owner) owners.set(el, owner);
+					if ((el as any).$$signalOwner !== owner) (el as any).$$signalOwner = owner;
 				});
 			else {
-				const previous = owners.get(el);
+				const previous = (el as any).$$signalOwner as SignalEventOwner | undefined;
 				if (previous !== owner) {
 					if (TRANSITION_JOURNAL !== null)
-						TRANSITION_JOURNAL.push(JOURNAL_EVENT_OWNER, owners, el, previous);
-					owners.set(el, owner);
+						TRANSITION_JOURNAL.push(JOURNAL_EVENT_OWNER, el, previous, null);
+					(el as any).$$signalOwner = owner;
 				}
 			}
 		}
@@ -27806,13 +27818,13 @@ export function evt0u(d: HandlerBundle, fn: any): void {
 			signalDocumentEnabled ||
 			activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
-			SIGNAL_EVENT_OWNERS !== null) &&
+			SIGNAL_EVENT_OWNERS_RECORDED) &&
 		(activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
 			STAGED_COMMIT_CAPTURE !== null ||
 			signalDocumentEnabled ||
 			CURRENT_SCOPE?.block.idState.renderOwner?.signalOwner !== undefined ||
-			SIGNAL_EVENT_OWNERS?.get(d.el!) !== CURRENT_SCOPE)
+			(d.el as any).$$signalOwner !== CURRENT_SCOPE)
 	)
 		setEventHandler(d.el!);
 }
@@ -27834,13 +27846,13 @@ export function evt1u(d: HandlerBundle, fn: any, a0: any): void {
 			signalDocumentEnabled ||
 			activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
-			SIGNAL_EVENT_OWNERS !== null) &&
+			SIGNAL_EVENT_OWNERS_RECORDED) &&
 		(activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
 			STAGED_COMMIT_CAPTURE !== null ||
 			signalDocumentEnabled ||
 			CURRENT_SCOPE?.block.idState.renderOwner?.signalOwner !== undefined ||
-			SIGNAL_EVENT_OWNERS?.get(d.el!) !== CURRENT_SCOPE)
+			(d.el as any).$$signalOwner !== CURRENT_SCOPE)
 	)
 		setEventHandler(d.el!);
 }
@@ -27863,13 +27875,13 @@ export function evt2u(d: HandlerBundle, fn: any, a0: any, a1: any): void {
 			signalDocumentEnabled ||
 			activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
-			SIGNAL_EVENT_OWNERS !== null) &&
+			SIGNAL_EVENT_OWNERS_RECORDED) &&
 		(activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
 			STAGED_COMMIT_CAPTURE !== null ||
 			signalDocumentEnabled ||
 			CURRENT_SCOPE?.block.idState.renderOwner?.signalOwner !== undefined ||
-			SIGNAL_EVENT_OWNERS?.get(d.el!) !== CURRENT_SCOPE)
+			(d.el as any).$$signalOwner !== CURRENT_SCOPE)
 	)
 		setEventHandler(d.el!);
 }
@@ -27904,13 +27916,13 @@ export function evtNu(d: HandlerBundle, fn: any, args: any[]): void {
 			signalDocumentEnabled ||
 			activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
-			SIGNAL_EVENT_OWNERS !== null) &&
+			SIGNAL_EVENT_OWNERS_RECORDED) &&
 		(activeSynchronousSignalOwner !== null ||
 			activeSignalOwnerEnvironment !== undefined ||
 			STAGED_COMMIT_CAPTURE !== null ||
 			signalDocumentEnabled ||
 			CURRENT_SCOPE?.block.idState.renderOwner?.signalOwner !== undefined ||
-			SIGNAL_EVENT_OWNERS?.get(d.el!) !== CURRENT_SCOPE)
+			(d.el as any).$$signalOwner !== CURRENT_SCOPE)
 	)
 		setEventHandler(d.el!);
 }
@@ -28508,7 +28520,7 @@ const CAPTURE_PATH: any[] = [];
 const CAPTURE_SLOTS: EventSlot[] = [];
 // Authority is a phase snapshot too: an earlier callback may publish a new
 // handler/owner before a queued ancestor runs. Allocate only after ownership exists.
-let CAPTURE_OWNERS: (SignalOwner | ScopeImpl | BlockImpl | undefined)[] | null = null;
+let CAPTURE_OWNERS: (SignalEventOwner | undefined)[] | null = null;
 
 /** Snapshot the phase's handler slots; returns whether any node on the path has one. */
 function snapshotDelegatedSlots(
@@ -28558,8 +28570,7 @@ function snapshotDelegatedSlots(
 		CAPTURE_SLOTS[index] = active;
 		if (active != null) {
 			found = true;
-			if (SIGNAL_EVENT_OWNERS !== null)
-				(CAPTURE_OWNERS ??= [])[index] = SIGNAL_EVENT_OWNERS.get(node);
+			if (SIGNAL_EVENT_OWNERS_RECORDED) (CAPTURE_OWNERS ??= [])[index] = node.$$signalOwner;
 		}
 	}
 	return found;
