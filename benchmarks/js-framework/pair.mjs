@@ -170,18 +170,44 @@ const parityFor = (op, repeat) => {
 	return repeat;
 };
 
+// `update` appends to every tenth label on each click, so a looped sample
+// would leave longer labels for the next one. Each update sample starts from
+// freshly built rows instead.
+async function prepare(page, op) {
+	if (op.name === 'update') {
+		await page.evaluate(() => document.getElementById('run').click());
+		await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 1000, null, {
+			timeout: 5000,
+		});
+	}
+	await ensureState(page, op.pre);
+}
+
+// Returns the repeat count and every trial count it ran. The trials are replayed
+// on the base page, so both pages run the identical operation sequence and their
+// seeded data streams stay in step.
 async function calibrate(page, op) {
-	if (!REPEATABLE.has(op.name)) return 1;
+	if (!REPEATABLE.has(op.name)) return { repeat: 1, trials: [] };
 	const cap = MAX_REPEAT[op.name] ?? MAX_REPEAT.default;
+	const trials = [];
 	let repeat = parityFor(op, 2);
 	for (let round = 0; round < 5; round++) {
-		await ensureState(page, op.pre);
+		await prepare(page, op);
 		const elapsed = await timeClick(page, op, selectorsFor(op, 1, repeat), repeat);
+		trials.push(repeat);
 		await sleep(30);
 		if (elapsed >= SAMPLE_MS * 0.8 || repeat >= cap) break;
 		repeat = parityFor(op, Math.min(cap, Math.ceil((repeat * SAMPLE_MS) / Math.max(elapsed, 0.1))));
 	}
-	return Math.min(repeat, parityFor(op, cap));
+	return { repeat: Math.min(repeat, parityFor(op, cap)), trials };
+}
+
+async function replayCalibration(page, op, trials) {
+	for (const repeat of trials) {
+		await prepare(page, op);
+		await timeClick(page, op, selectorsFor(op, 1, repeat), repeat);
+		await sleep(30);
+	}
 }
 
 async function timeFixture(fixture) {
@@ -207,9 +233,13 @@ async function timeFixture(fixture) {
 
 		const results = { base: {}, head: {} };
 		for (const op of CANONICAL_OPS) {
-			const repeat = await onSide('head', async () => {
+			const { repeat, trials } = await onSide('head', async () => {
 				await pages.head.bringToFront();
 				return await calibrate(pages.head, op);
+			});
+			await onSide('base', async () => {
+				await pages.base.bringToFront();
+				await replayCalibration(pages.base, op, trials);
 			});
 			const samples = { base: [], head: [] };
 			const sampleMs = { base: [], head: [] };
@@ -220,7 +250,7 @@ async function timeFixture(fixture) {
 					await onSide(side, async () => {
 						// The sampled page is the active one, so its frames keep running.
 						await pages[side].bringToFront();
-						await ensureState(pages[side], op.pre);
+						await prepare(pages[side], op);
 						const elapsed = await timeClick(pages[side], op, selectors, repeat);
 						if (op.alternateClick) await verifySelection(pages[side], selectors.at(-1));
 						samples[side].push(elapsed / repeat);
