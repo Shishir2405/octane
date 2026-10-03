@@ -39,11 +39,9 @@ SVG=octane-tsrx-svg-dashboard-bench
 # name sha
 COMMITS=(
 	"p833 6927595656860f12fef79948135f5f1ee29595c2"
-	"p1069 1ed5d2ab9c6291b734a70a102c78b25c8bcdb3d1"
 	"main dc3e180236a5d55fb1288ef8738ace52870ef891"
-	"fix1069 eb910c7ff52fa6fc0c330e489621def0ba2b8ba3"
-	"fix833 f10c630f2ffe5368d395a63e10181e9b840a0c99"
 	"both d6591cb3143824660f1ac7f9631845dd20908bbd"
+	"bothS 778d7fddbcf6aea7824b05d63652a0e1b28a0937"
 )
 SVG_OLD=7a6fba3aef8a0bb1c9f5a01ca00bbcec0e4aa6f1
 
