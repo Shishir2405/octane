@@ -34,6 +34,11 @@ import { fileURLToPath } from 'node:url';
 export const COMMENT_MARKER = '<!-- octane-pr-bench -->';
 export const SUITES = ['js-framework', 'bundle-size', 'bundle-reachability'];
 export const TIMING_THRESHOLD = 0.03;
+// Chromium clamps performance.now() to 0.1ms. A verdict also needs the median
+// shift to span two ticks of the whole sample, so an operation that cannot loop
+// (a ~3ms create) cannot be called slower on one tick of quantization.
+const TIMER_TICK_MS = 0.1;
+const MIN_TICKS = 2;
 const DETAIL_LIMIT = 2000;
 const COMMENT_LIMIT = 60_000; // GitHub rejects comment bodies over 65,536 characters
 
@@ -56,10 +61,13 @@ const SUITE_INFO = {
 const isTiming = (stat) => typeof stat?.score === 'number';
 const valueOf = (stat) => stat?.score ?? stat?.median;
 
-export function timingVerdict(paired) {
+export function timingVerdict(paired, sampleMs) {
 	if (!paired) return 'unpaired';
-	if (paired.low > 1 + TIMING_THRESHOLD) return 'slower';
-	if (paired.high < 1 - TIMING_THRESHOLD) return 'faster';
+	const resolvable =
+		typeof sampleMs !== 'number' ||
+		Math.abs(paired.ratio - 1) * sampleMs >= MIN_TICKS * TIMER_TICK_MS;
+	if (resolvable && paired.low > 1 + TIMING_THRESHOLD) return 'slower';
+	if (resolvable && paired.high < 1 - TIMING_THRESHOLD) return 'faster';
 	return 'within noise';
 }
 
@@ -92,7 +100,7 @@ export function compareSuite(suite, base, head) {
 			const row = { target: target.name, op, before, after, percent };
 			if (isTiming(headStat) || isTiming(baseStat)) {
 				const paired = headStat.paired ?? null;
-				timing.push({ ...row, paired, verdict: timingVerdict(paired) });
+				timing.push({ ...row, paired, verdict: timingVerdict(paired, headStat.sampleMs) });
 			} else if (after !== before) {
 				deterministic.push({ ...row, verdict: after > before ? 'larger' : 'smaller' });
 			} else {

@@ -135,6 +135,15 @@ test('a paired timing verdict needs the whole 95% interval beyond ±3%', () => {
 	assert.equal(timingVerdict(null), 'unpaired');
 });
 
+// A 2ms looped sample read +5.3% when every pair differed by one 0.1ms tick.
+test('a shift smaller than two timer ticks of the sample is never a verdict', () => {
+	const shifted = paired(1.0526, 1.0476, 1.098);
+	assert.equal(timingVerdict(shifted, 2), 'within noise');
+	assert.equal(timingVerdict(shifted, 20), 'slower');
+	assert.equal(timingVerdict(paired(1.06, 1.04, 1.08), 3), 'within noise');
+	assert.equal(timingVerdict(paired(1.08, 1.05, 1.1), 3), 'slower');
+});
+
 test('timing verdicts are reported but never fail the report', () => {
 	const result = (score, pair) =>
 		suite('js-framework', [{ name: 'octane-tsrx', ops: { run: timed(score, pair) } }]);

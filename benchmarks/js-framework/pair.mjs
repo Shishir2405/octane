@@ -67,8 +67,9 @@ if (!Number.isSafeInteger(PAIRS) || PAIRS < 2) throw new Error('--pairs must be 
 const SAMPLE_MS = 20;
 const WARMUP = 3;
 // Upper bounds on the repetitions in one sample. Each `remove` deletes a row,
-// so it stays well inside the 1,000-row table.
-const MAX_REPEAT = { remove: 200, default: 400 };
+// so it stays inside the 1,000-row table. A warm selection takes a few
+// microseconds, so it needs thousands of clicks to fill a sample.
+const MAX_REPEAT = { remove: 800, default: 5000 };
 const REPEATABLE = new Set(['update', 'select', 'swap', 'remove', 'select_lots']);
 const FIXTURES = [
 	{ name: 'octane-tsrx', directory: 'octane-tsrx', head: 5176, base: 6176 },
@@ -155,30 +156,32 @@ const selectorsFor = (op, index, repeat) =>
 			: [index % 2 === 1 ? op.alternateClick : op.click]
 		: [op.click];
 
-// Repetitions per sample, from three single head samples. Both sides use the
-// same count, so each pair compares the same work.
-async function calibrate(page, op) {
-	if (!REPEATABLE.has(op.name)) return 1;
-	const singles = [];
-	// Indexes 1..3 end on the alternate row, where every timed sample ends too.
-	for (let i = 1; i <= 3; i++) {
-		await ensureState(page, op.pre);
-		singles.push(await timeClick(page, op, selectorsFor(op, i, 1), 1));
-		await sleep(30);
-	}
-	const median = singles.sort((a, b) => a - b)[1];
-	if (median >= SAMPLE_MS) return 1;
-	let repeat = Math.min(
-		MAX_REPEAT[op.name] ?? MAX_REPEAT.default,
-		Math.ceil(SAMPLE_MS / Math.max(median, 0.05)),
-	);
+// Repetitions per sample, sized on the head page and shared by both sides, so
+// each pair compares the same work. A looped operation runs far faster than a
+// cold single one, so the count is refined on loops until a sample really takes
+// about SAMPLE_MS; a shorter sample quantizes on the 0.1ms timer.
+const parityFor = (op, repeat) => {
 	// A selection sample ends on the alternate row, so the next one starts by
 	// selecting a different row instead of re-selecting the current one.
 	if (op.alternateClick && repeat % 2 === 1) repeat++;
 	// An even number of swaps restores the original order, which a swap that
 	// did nothing would also leave. An odd count keeps every sample verifiable.
 	if (op.name === 'swap' && repeat % 2 === 0) repeat++;
-	return Math.max(repeat, op.name === 'swap' ? 3 : 2);
+	return repeat;
+};
+
+async function calibrate(page, op) {
+	if (!REPEATABLE.has(op.name)) return 1;
+	const cap = MAX_REPEAT[op.name] ?? MAX_REPEAT.default;
+	let repeat = parityFor(op, 2);
+	for (let round = 0; round < 5; round++) {
+		await ensureState(page, op.pre);
+		const elapsed = await timeClick(page, op, selectorsFor(op, 1, repeat), repeat);
+		await sleep(30);
+		if (elapsed >= SAMPLE_MS * 0.8 || repeat >= cap) break;
+		repeat = parityFor(op, Math.min(cap, Math.ceil((repeat * SAMPLE_MS) / Math.max(elapsed, 0.1))));
+	}
+	return Math.min(repeat, parityFor(op, cap));
 }
 
 async function timeFixture(fixture) {
@@ -209,6 +212,7 @@ async function timeFixture(fixture) {
 				return await calibrate(pages.head, op);
 			});
 			const samples = { base: [], head: [] };
+			const sampleMs = { base: [], head: [] };
 			for (let index = 0; index < PAIRS; index++) {
 				const order = index % 2 === 0 ? SIDES : [...SIDES].reverse();
 				const selectors = selectorsFor(op, index, repeat);
@@ -220,17 +224,25 @@ async function timeFixture(fixture) {
 						const elapsed = await timeClick(pages[side], op, selectors, repeat);
 						if (op.alternateClick) await verifySelection(pages[side], selectors.at(-1));
 						samples[side].push(elapsed / repeat);
+						sampleMs[side].push(elapsed);
 						await sleep(30);
 					});
 				}
 			}
 			for (const side of SIDES) {
-				results[side][op.name] = { ...timingStatForJson(summarizeSamples(samples[side])), repeat };
+				// The whole sample's median duration shows whether the loop cleared the
+				// timer floor.
+				const sampleMedian = [...sampleMs[side]].sort((a, b) => a - b)[sampleMs[side].length >> 1];
+				results[side][op.name] = {
+					...timingStatForJson(summarizeSamples(samples[side])),
+					repeat,
+					sampleMs: sampleMedian,
+				};
 			}
 			results.head[op.name].paired = pairedRatio(samples.base, samples.head);
 			const { ratio, low, high } = results.head[op.name].paired;
 			console.error(
-				`  ${fixture.name} ${op.name.padEnd(11)} ×${String(repeat).padStart(3)}  ` +
+				`  ${fixture.name} ${op.name.padEnd(11)} ×${String(repeat).padStart(4)} ${results.head[op.name].sampleMs.toFixed(1).padStart(6)}ms  ` +
 					`head/base ${ratio.toFixed(3)} [${low.toFixed(3)}, ${high.toFixed(3)}]`,
 			);
 		}
