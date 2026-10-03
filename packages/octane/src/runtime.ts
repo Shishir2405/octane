@@ -37520,6 +37520,8 @@ export function childSlot(
 			return;
 		}
 		if (state.block !== null && comp === state.currentComp) {
+			// updateDeoptComponent takes this branch for a de-opt list item without
+			// entering the item's render; keep the two in step.
 			// Same component identity → update in place (matches componentSlot),
 			// honoring React.memo's bail — previously only componentSlot did, so a
 			// memo()'d component rendered as VALUE-POSITION children (e.g. provider
