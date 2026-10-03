@@ -274,6 +274,8 @@ export function analyzeReport({
 		}
 		if (deterministic.length || !timing.length) {
 			sections.push(...renderDeterministic(deterministic, unchanged));
+		} else if (SUITE_INFO[suite]?.workGate && unchanged) {
+			sections.push(`All ${unchanged} work counters are unchanged.`);
 		}
 	}
 	const headline = [...failures, ...notes];

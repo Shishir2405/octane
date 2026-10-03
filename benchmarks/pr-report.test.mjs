@@ -113,6 +113,19 @@ test('any increase in a js-framework work counter fails, and a decrease does not
 	assert.deepEqual(fewer.failures, []);
 });
 
+test('unchanged work counters are confirmed beside the timing table', () => {
+	const result = suite('js-framework', [
+		{ name: 'octane-tsrx', ops: { run: timed(10), calls_run: bytes(34091), dom_run: bytes(2000) } },
+	]);
+	const { body, failures } = analyzeReport({
+		suites: ['js-framework'],
+		base: { 'js-framework': result },
+		head: { 'js-framework': result },
+	});
+	assert.deepEqual(failures, []);
+	assert.match(body, /All 2 work counters are unchanged\./);
+});
+
 test('a paired timing verdict needs the whole 95% interval beyond ±3%', () => {
 	assert.equal(timingVerdict(paired(1.06, 1.031, 1.09)), 'slower');
 	assert.equal(timingVerdict(paired(1.06, 1.029, 1.09)), 'within noise');

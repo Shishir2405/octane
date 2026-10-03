@@ -175,7 +175,10 @@ async function calibrate(page, op) {
 	// A selection sample ends on the alternate row, so the next one starts by
 	// selecting a different row instead of re-selecting the current one.
 	if (op.alternateClick && repeat % 2 === 1) repeat++;
-	return Math.max(repeat, 2);
+	// An even number of swaps restores the original order, which a swap that
+	// did nothing would also leave. An odd count keeps every sample verifiable.
+	if (op.name === 'swap' && repeat % 2 === 0) repeat++;
+	return Math.max(repeat, op.name === 'swap' ? 3 : 2);
 }
 
 async function timeFixture(fixture) {

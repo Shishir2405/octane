@@ -162,7 +162,8 @@ export async function timeClick(page, op, selectors, repeat = 1) {
 					`${op}: commit was not inside timed click (expected ${expectedRows} rows, found ${tbody?.rows.length})`,
 				);
 			}
-			// An even number of swaps restores the original order.
+			// An even number of swaps restores the original order, so callers that
+			// need the swap verified repeat it an odd number of times.
 			const swappedRow = repeat % 2 === 1 ? tbody.rows[998] : tbody.rows[1];
 			if (
 				(op === 'replace' && firstRow === tbody.rows[0]) ||
