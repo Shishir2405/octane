@@ -42,21 +42,17 @@ COMMITS=(
 	"at833 5f7a4579bab1a9987cb54fb6b2fc1f314497fc3c"
 	"main ac729dc14832c082b77cd1bf03b8fb7509ced89a"
 	"cand a0746246a9946bc9717d1d6d77b392b01a865ebd"
-	"nojrn 864227f7036dab69f94d110d727664acdd1870f3"
 )
-
-pnpm --filter react-compiler-memowall-bench build >"$OUT/build-react-mw.log" 2>&1
-serve benchmarks/memo-wall/react-compiler 5226
-
-MW_T='{"name":"react","url":"http://localhost:5226/"}'
-
+# Unminified builds keep function names for the profile and call counts.
+export MEMO_WALL_WORK=1
+MW_T=''
 i=0
 for entry in "${COMMITS[@]}"; do
 	read -r name sha <<<"$entry"
 	tree "$sha" $MW
 	serve "/tmp/at-$sha/benchmarks/memo-wall/octane-tsrx" $((7100 + i))
-	MW_T="$MW_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7100 + i))/\"}"
+	MW_T="$MW_T${MW_T:+,}{\"name\":\"$name\",\"url\":\"http://localhost:$((7100 + i))/\"}"
 	i=$((i + 1))
 done
 
-TARGETS="[$MW_T]" BENCH_JSON="$OUT/memo-wall-attrib.json" node benchmarks/memo-wall/run.mjs "$ITER" || echo "memo-wall exited $?"
+TARGETS="[$MW_T]" BENCH_JSON="$OUT/memo-wall-profile.json" node benchmarks/ab-profile.mjs || echo "profile exited $?"
