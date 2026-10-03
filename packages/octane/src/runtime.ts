@@ -19456,6 +19456,8 @@ class HydrationCapability {
 	 */
 	renderClaimed(block: Block, scope: Scope, slotKey: number): void {
 		const outer = this.beginClaim(getNextSibling(block.startMarker!));
+		const previousHeld = this.heldClaim;
+		this.heldClaim = undefined;
 		let from: Node | null | undefined;
 		try {
 			renderBlock(block);
@@ -19465,6 +19467,10 @@ class HydrationCapability {
 			throw error;
 		} finally {
 			from = this.endClaim(outer);
+			// When the component's content is a markerless branch whose template
+			// adopted the range's first node, its settlement is the frame's.
+			if (from === undefined && this.heldClaim !== undefined) from = this.heldClaim;
+			this.heldClaim = previousHeld;
 		}
 		if (!block.disposed) this.settleClaim(block, block.endMarker!, from, scope, slotKey);
 	}
