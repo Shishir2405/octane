@@ -38,29 +38,25 @@ SVG=octane-tsrx-svg-dashboard-bench
 
 # name sha
 COMMITS=(
-	"main 950ef0b0bd80b87e8a2777b068dec65c6905eabb"
-	"m3 444f63f35074e72222f650670d26588067464d6f"
-	"m4 0f86fc137c2271d132c0f57d9a68c88608e139cc"
+	"p833 6927595656860f12fef79948135f5f1ee29595c2"
+	"at833 5f7a4579bab1a9987cb54fb6b2fc1f314497fc3c"
+	"main ac729dc14832c082b77cd1bf03b8fb7509ced89a"
+	"cand a0746246a9946bc9717d1d6d77b392b01a865ebd"
+	"nojrn 864227f7036dab69f94d110d727664acdd1870f3"
 )
 
-pnpm --filter react-jsbench build >"$OUT/build-react-js.log" 2>&1
 pnpm --filter react-compiler-memowall-bench build >"$OUT/build-react-mw.log" 2>&1
-serve benchmarks/js-framework/react 5175
 serve benchmarks/memo-wall/react-compiler 5226
 
-JS_T='{"name":"react","url":"http://localhost:5175/","ready":"#run"}'
 MW_T='{"name":"react","url":"http://localhost:5226/"}'
 
 i=0
 for entry in "${COMMITS[@]}"; do
 	read -r name sha <<<"$entry"
-	tree "$sha" $JS $MW
-	serve "/tmp/at-$sha/benchmarks/js-framework/octane-tsrx" $((7000 + i))
-	JS_T="$JS_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7000 + i))/\",\"ready\":\"#run\"}"
+	tree "$sha" $MW
 	serve "/tmp/at-$sha/benchmarks/memo-wall/octane-tsrx" $((7100 + i))
 	MW_T="$MW_T,{\"name\":\"$name\",\"url\":\"http://localhost:$((7100 + i))/\"}"
 	i=$((i + 1))
 done
 
 TARGETS="[$MW_T]" BENCH_JSON="$OUT/memo-wall-attrib.json" node benchmarks/memo-wall/run.mjs "$ITER" || echo "memo-wall exited $?"
-TARGETS="[$JS_T]" BENCH_JSON="$OUT/js-framework-reorder-attrib.json" node benchmarks/js-framework/run-reorder.mjs "$ITER" || echo "reorder exited $?"
