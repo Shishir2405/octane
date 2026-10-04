@@ -400,33 +400,36 @@ catalogs:
     '@tiptap/starter-kit':
       specifier: 3.28.0
       version: 3.28.0
+    '@tsrx/content-mapper':
+      specifier: 0.1.2
+      version: 0.1.2
     '@tsrx/core':
-      specifier: ^0.5.2
-      version: 0.5.2
+      specifier: ^0.5.4
+      version: 0.5.4
     '@tsrx/oxc':
       specifier: 0.18.0
       version: 0.18.0
     '@tsrx/prettier-plugin':
-      specifier: ^0.5.2
-      version: 0.5.2
+      specifier: ^0.6.2
+      version: 0.6.2
     '@tsrx/react':
-      specifier: ^0.4.2
-      version: 0.4.2
+      specifier: ^0.4.4
+      version: 0.4.4
     '@tsrx/ripple':
       specifier: ^0.2.0
       version: 0.2.0
     '@tsrx/solid':
-      specifier: ^0.3.2
-      version: 0.3.2
+      specifier: ^0.3.4
+      version: 0.3.4
     '@tsrx/typescript-plugin':
-      specifier: ^0.5.2
-      version: 0.5.2
+      specifier: ^0.6.2
+      version: 0.6.2
     '@tsrx/vite-plugin-react':
-      specifier: ^0.0.117
-      version: 0.0.117
+      specifier: ^0.0.119
+      version: 0.0.119
     '@tsrx/vite-plugin-solid':
-      specifier: ^0.0.114
-      version: 0.0.114
+      specifier: ^0.0.116
+      version: 0.0.116
     '@types/babel__core':
       specifier: 7.20.5
       version: 7.20.5
@@ -1064,6 +1067,10 @@ catalogs:
     '@types/react-dom':
       specifier: 19.2.3
       version: 19.2.3
+  native:
+    typescript:
+      specifier: 7.1.0-dev.20260921.1
+      version: 7.1.0-dev.20260921.1
   react-colorful-react-oracle:
     '@types/react':
       specifier: 19.2.17
@@ -1257,7 +1264,7 @@ overrides:
 packageExtensionsChecksum: sha256-kfm1FmKj+dGJ1mbVor30ucTdX3Yg+IVGhIkuq6dFEI0=
 
 patchedDependencies:
-  '@tsrx/core@0.5.2': 3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713
+  '@tsrx/core@0.5.4': 3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713
   '@vitest/browser@4.1.10': d32609637593fc211ed808df6fbea6cb1da80adb049c0b0752bda8e1586d0ae0
   '@vitest/mocker@4.1.10': 538740e541a5a8ef50611b521995775cac3031548f696745eb4b90a7bd659ca4
 
@@ -1293,14 +1300,14 @@ importers:
         specifier: catalog:default
         version: 0.2.3(@babel/core@7.29.7(supports-color@10.2.2))(@babel/plugin-transform-runtime@7.29.7(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@babel/runtime@7.29.7)(rolldown@1.2.0)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       '@tsrx/content-mapper':
-        specifier: 0.1.1
-        version: 0.1.1
+        specifier: catalog:default
+        version: 0.1.2
       '@tsrx/prettier-plugin':
         specifier: catalog:default
-        version: 0.5.2(prettier@3.9.9)
+        version: 0.6.2(prettier@3.9.9)
       '@tsrx/typescript-plugin':
         specifier: catalog:default
-        version: 0.5.2(@tsrx/react@0.4.2(react@19.2.8))(@tsrx/ripple@0.2.0(typescript@5.9.3))(@tsrx/solid@0.3.2(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3))(octane@packages+octane)(typescript@5.9.3)
+        version: 0.6.2(@tsrx/content-mapper@0.1.2)(@tsrx/react@0.4.4(react@19.2.8))(@tsrx/ripple@0.2.0(typescript@5.9.3))(@tsrx/solid@0.3.4(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3))(octane@packages+octane)(typescript@5.9.3)
       '@types/node':
         specifier: catalog:default
         version: 24.13.3
@@ -2235,7 +2242,7 @@ importers:
         version: link:../../packages/rspeedy-plugin-octane
       '@tsrx/typescript-plugin':
         specifier: catalog:default
-        version: 0.5.2(@tsrx/react@0.4.2(react@19.2.8))(@tsrx/ripple@0.2.0(typescript@5.9.3))(@tsrx/solid@0.3.2(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3))(octane@packages+octane)(typescript@5.9.3)
+        version: 0.6.2(@tsrx/content-mapper@0.1.2)(@tsrx/react@0.4.4(react@19.2.8))(@tsrx/ripple@0.2.0(typescript@5.9.3))(@tsrx/solid@0.3.4(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3))(octane@packages+octane)(typescript@5.9.3)
       octane:
         specifier: workspace:*
         version: link:../../packages/octane
@@ -2504,10 +2511,10 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@tsrx/vite-plugin-react':
         specifier: catalog:default
-        version: 0.0.117(react@19.2.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 0.0.119(react@19.2.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       vite:
         specifier: catalog:default
         version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
@@ -2536,10 +2543,10 @@ importers:
     devDependencies:
       '@tsrx/solid':
         specifier: catalog:default
-        version: 0.3.2(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)
+        version: 0.3.4(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)
       '@tsrx/vite-plugin-solid':
         specifier: catalog:default
-        version: 0.0.114(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 0.0.116(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       vite:
         specifier: catalog:default
         version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
@@ -3150,7 +3157,7 @@ importers:
     dependencies:
       '@tsrx/core':
         specifier: catalog:default
-        version: 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+        version: 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       miniflare:
         specifier: catalog:default
         version: 4.20260714.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
@@ -3204,10 +3211,10 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@tsrx/vite-plugin-react':
         specifier: catalog:default
-        version: 0.0.117(react@19.2.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 0.0.119(react@19.2.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       vite:
         specifier: catalog:default
         version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
@@ -3360,10 +3367,10 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@tsrx/vite-plugin-react':
         specifier: catalog:default
-        version: 0.0.117(react@19.2.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 0.0.119(react@19.2.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       vite:
         specifier: catalog:default
         version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
@@ -3392,10 +3399,10 @@ importers:
     devDependencies:
       '@tsrx/solid':
         specifier: catalog:default
-        version: 0.3.2(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)
+        version: 0.3.4(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)
       '@tsrx/vite-plugin-solid':
         specifier: catalog:default
-        version: 0.0.114(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 0.0.116(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
       vite:
         specifier: catalog:default
         version: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
@@ -5014,7 +5021,7 @@ importers:
         version: 4.2.6(graphql@16.14.2)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rxjs@7.8.2)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -5073,7 +5080,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -5190,7 +5197,7 @@ importers:
         version: 14.6.3(@testing-library/dom@10.4.1)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.8)
+        version: 0.4.4(react@19.2.8)
       '@types/luxon':
         specifier: 3.7.4
         version: 3.7.4
@@ -5324,7 +5331,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       octane:
         specifier: workspace:*
         version: link:../octane
@@ -5349,7 +5356,7 @@ importers:
         version: 0.53.0(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(refractor@5.0.0)(yjs@13.6.31)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -5418,7 +5425,7 @@ importers:
         version: 6.9.1
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:cmdk-react-oracle
         version: 19.2.17
@@ -5457,7 +5464,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:react-colorful-react-oracle
         version: 19.2.17
@@ -5534,7 +5541,7 @@ importers:
         version: link:../testing-library
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -5599,7 +5606,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       dexie-react-hooks:
         specifier: 4.4.0
         version: 4.4.0(dexie@4.4.4)(react@19.2.7)
@@ -5651,7 +5658,7 @@ importers:
         version: 0.5.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@vitest/coverage-v8':
         specifier: catalog:default
         version: 4.1.10(@vitest/browser@4.1.10)(vitest@4.1.10)
@@ -5719,7 +5726,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/prop-types':
         specifier: 15.7.15
         version: 15.7.15
@@ -5810,7 +5817,7 @@ importers:
         version: 9.6.1(@types/react@19.2.18)(immer@11.1.15)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.172.0)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -5929,7 +5936,7 @@ importers:
         version: 2.0.6(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -6043,7 +6050,7 @@ importers:
         version: 14.6.1(@testing-library/dom@10.4.1)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@18.2.0)
+        version: 0.4.4(react@18.2.0)
       '@types/react':
         specifier: 18.3.19
         version: 18.3.19
@@ -6118,7 +6125,7 @@ importers:
         version: 14.6.1(@testing-library/dom@10.4.1)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -6148,7 +6155,7 @@ importers:
         version: 2.1.2(gsap@3.15.0)(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -6193,7 +6200,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -6270,7 +6277,7 @@ importers:
         version: 6.9.1
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -6325,7 +6332,7 @@ importers:
         version: link:../testing-library
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -6428,7 +6435,7 @@ importers:
         version: 8.1.0
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/node':
         specifier: catalog:default
         version: 24.13.3
@@ -6452,7 +6459,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: 19.2.17
         version: 19.2.17
@@ -6531,7 +6538,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/node':
         specifier: catalog:default
         version: 24.13.3
@@ -6643,7 +6650,7 @@ importers:
         version: 0.51.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(yjs@13.6.31)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -6698,7 +6705,7 @@ importers:
         version: 16.3.1(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.3)
+        version: 0.4.4(react@19.2.3)
       '@types/react':
         specifier: catalog:livestore-react-oracle
         version: 19.2.7
@@ -6741,7 +6748,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -6796,7 +6803,7 @@ importers:
         version: 9.5.0(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -6857,7 +6864,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.0.0)
+        version: 0.4.4(react@19.0.0)
       '@types/node':
         specifier: catalog:default
         version: 24.13.3
@@ -6952,7 +6959,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -6992,7 +6999,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: 19.2.7
         version: 19.2.7
@@ -7053,7 +7060,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7093,7 +7100,7 @@ importers:
         version: 6.9.1
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7117,7 +7124,7 @@ importers:
     dependencies:
       '@tsrx/core':
         specifier: catalog:default
-        version: 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+        version: 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@tsrx/oxc':
         specifier: catalog:default
         version: 0.18.0(svelte@5.56.7)
@@ -7148,7 +7155,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react-dom':
         specifier: catalog:default
         version: 19.2.4(@types/react@19.2.18)
@@ -7190,7 +7197,7 @@ importers:
     devDependencies:
       '@tsrx/core':
         specifier: catalog:default
-        version: 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+        version: 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@types/node':
         specifier: catalog:default
         version: 24.13.3
@@ -7315,7 +7322,7 @@ importers:
         version: 2.1.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7373,7 +7380,7 @@ importers:
         version: 8.0.1(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react-test-renderer@18.3.1(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -7440,7 +7447,7 @@ importers:
         version: 8.0.1(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7519,7 +7526,7 @@ importers:
         version: 0.20.2(@types/react@19.2.18)(immer@11.1.15)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7547,7 +7554,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7587,7 +7594,7 @@ importers:
         version: 6.9.1
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@wagmi/connectors':
         specifier: catalog:default
         version: 8.2.0(@coinbase/wallet-sdk@4.3.6(@types/react@19.2.18)(bufferutil@4.1.0)(immer@11.1.15)(react@19.2.7)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.2.7))(utf-8-validate@5.0.10)(zod@3.25.76))(@safe-global/safe-apps-provider@0.18.6(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(@safe-global/safe-apps-sdk@9.1.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(@wagmi/core@3.6.5(@tanstack/query-core@5.102.8)(@types/react@19.2.18)(immer@11.1.15)(react@19.2.7)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.2.7))(viem@2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)))(@walletconnect/ethereum-provider@2.21.1(@types/react@19.2.18)(bufferutil@4.1.0)(db0@0.3.4)(encoding@0.1.13)(react@19.2.7)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(typescript@5.9.3)(viem@2.55.10(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
@@ -7611,7 +7618,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7638,7 +7645,7 @@ importers:
         version: 1.1.0
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -7702,7 +7709,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7729,7 +7736,7 @@ importers:
         version: 2.12.0(react-redux@9.3.0(@types/react@19.2.18)(react@19.2.7)(redux@5.0.1))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7769,7 +7776,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7797,7 +7804,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -7833,7 +7840,7 @@ importers:
         version: 14.6.1(@testing-library/dom@10.4.1)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.3)
+        version: 0.4.4(react@19.2.3)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -7968,7 +7975,7 @@ importers:
         version: 2.1.3(@swc/helpers@0.5.23)
       '@tsrx/typescript-plugin':
         specifier: catalog:default
-        version: 0.5.2(@tsrx/react@0.4.2(react@19.2.8))(@tsrx/ripple@0.2.0(typescript@5.9.3))(@tsrx/solid@0.3.2(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3))(octane@packages+octane)(typescript@5.9.3)
+        version: 0.6.2(@tsrx/content-mapper@0.1.2)(@tsrx/react@0.4.4(react@19.2.8))(@tsrx/ripple@0.2.0(typescript@5.9.3))(@tsrx/solid@0.3.4(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3))(octane@packages+octane)(typescript@5.9.3)
       '@types/node':
         specifier: catalog:default
         version: 24.13.3
@@ -7999,7 +8006,7 @@ importers:
         version: 0.9.7(@react-rxjs/core@0.10.8(react@19.2.7)(rxjs@7.8.2))(react@19.2.7)(rxjs@7.8.2)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -8026,7 +8033,7 @@ importers:
         version: 5.2.1(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -8063,7 +8070,7 @@ importers:
         version: 2.2.1(react@19.2.7)(typescript@7.0.2)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -8087,7 +8094,7 @@ importers:
         version: 2.2.5(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -8172,7 +8179,7 @@ importers:
         version: 10.4.1(@testing-library/dom@10.4.1)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: 19.2.17
         version: 19.2.17
@@ -8263,7 +8270,7 @@ importers:
         version: 1.8.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -8363,7 +8370,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -8557,7 +8564,7 @@ importers:
         version: 6.9.1
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -8597,7 +8604,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/stylis':
         specifier: catalog:default
         version: 4.2.7
@@ -8762,7 +8769,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -8835,7 +8842,7 @@ importers:
         version: 6.9.1
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -8885,7 +8892,7 @@ importers:
         version: 6.9.1
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:tanstack-devtools-react-oracle
         version: 19.2.17
@@ -8931,7 +8938,7 @@ importers:
         version: 14.6.1(@testing-library/dom@10.4.1)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -8971,7 +8978,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -9017,7 +9024,7 @@ importers:
         version: 0.11.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:tanstack-pacer-react-oracle
         version: 19.2.17
@@ -9069,7 +9076,7 @@ importers:
         version: 2.0.2(@jest/globals@30.4.1(supports-color@10.2.2))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bufferutil@4.1.0)(expect@30.4.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(supports-color@10.2.2)(utf-8-validate@5.0.10)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -9115,7 +9122,7 @@ importers:
         version: 1.170.41(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -9158,7 +9165,7 @@ importers:
         version: 1.167.3(@tanstack/query-core@5.102.8)(@tanstack/react-query@5.102.8(react@19.2.7))(@tanstack/react-router@1.170.41(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@tanstack/router-core@1.171.34)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -9325,7 +9332,7 @@ importers:
         version: 14.6.1(@testing-library/dom@10.4.1)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.3)
+        version: 0.4.4(react@19.2.3)
       '@types/react':
         specifier: catalog:tanstack-store-react-oracle
         version: 19.2.7
@@ -9377,7 +9384,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -9423,7 +9430,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -9565,7 +9572,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -9611,7 +9618,7 @@ importers:
         version: 2.1.4(@swc/helpers@0.5.23)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/three':
         specifier: catalog:default
         version: 0.172.0
@@ -9672,7 +9679,7 @@ importers:
         version: 3.28.0
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: 19.2.17
         version: 19.2.17
@@ -9742,7 +9749,7 @@ importers:
         version: 14.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -9806,7 +9813,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/lodash.debounce':
         specifier: 4.0.9
         version: 4.0.9
@@ -9846,7 +9853,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -10028,7 +10035,7 @@ importers:
         version: 10.1.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@visx/annotation':
         specifier: catalog:default
         version: 4.0.0(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -10135,7 +10142,7 @@ importers:
         version: 5.102.8(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -10162,7 +10169,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:default
         version: 19.2.18
@@ -10214,7 +10221,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -10269,7 +10276,7 @@ importers:
         version: 16.3.1(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.3)
+        version: 0.4.4(react@19.2.3)
       '@types/react':
         specifier: catalog:xstate-react-oracle
         version: 19.2.17
@@ -10330,7 +10337,7 @@ importers:
         version: 16.3.1(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.3)
+        version: 0.4.4(react@19.2.3)
       '@types/react':
         specifier: catalog:xstate-store-react-oracle
         version: 19.2.17
@@ -10376,7 +10383,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/jsdom':
         specifier: catalog:default
         version: 30.0.0
@@ -10431,7 +10438,7 @@ importers:
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       '@types/react':
         specifier: catalog:zag-react-oracle
         version: 19.2.7
@@ -10471,7 +10478,7 @@ importers:
     devDependencies:
       '@tsrx/react':
         specifier: catalog:default
-        version: 0.4.2(react@19.2.7)
+        version: 0.4.4(react@19.2.7)
       esbuild:
         specifier: catalog:default
         version: 0.28.1
@@ -10697,7 +10704,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/octane
       typescript:
-        specifier: 7.1.0-dev.20260921.1
+        specifier: catalog:native
         version: 7.1.0-dev.20260921.1
 
   scripts/react-parity/fixtures/drei:
@@ -10849,10 +10856,10 @@ importers:
         version: 3.23.0
       '@tsrx/core':
         specifier: catalog:default
-        version: 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+        version: 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@tsrx/prettier-plugin':
         specifier: catalog:default
-        version: 0.5.2(prettier@3.9.9)
+        version: 0.6.2(prettier@3.9.9)
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
@@ -20547,14 +20554,14 @@ packages:
   '@ts-morph/common@0.27.0':
     resolution: {integrity: sha512-Wf29UqxWDpc+i61k3oIOzcUfQt79PIT9y/MWfAGlrkjg6lBC1hwDECLXPVJAhWjiGbfBCxZd65F/LIZF3+jeJQ==}
 
-  '@tsrx/content-mapper@0.1.1':
-    resolution: {integrity: sha512-TaYkaQRTtcz5yu/JA/kqA53X76/RdibmhsPzU4elpq4wIJMSOl48BvL+5/+abRXl28bZzYLpXRqB/qQb35kedg==}
+  '@tsrx/content-mapper@0.1.2':
+    resolution: {integrity: sha512-rLKHpF/9WtOl2LAc1LpQtWb2rQhmpiVs2r2Mlp4RyQ1KJVVvn+ivZlHOt/krIZmPm9IJHxjTV8Dqf9gSfOfqJQ==}
 
   '@tsrx/core@0.2.0':
     resolution: {integrity: sha512-IuzVAVOtGNxJnI1nnExyUoLErUpVjtHd0Hlaf4wlfVU2ENUNzrWnyrKBz2ogvV3vbgeNSdjSnJPhCRYTaayKAw==}
 
-  '@tsrx/core@0.5.2':
-    resolution: {integrity: sha512-osF3PgCwzHXcmzD2mZZHddI5Eitqviet1UxiV4nVU5cApoWiy9f+AVlIMbO7RftxFg9nfD/dlREoAbld2+5rIA==}
+  '@tsrx/core@0.5.4':
+    resolution: {integrity: sha512-urwVCk2f4AvosEGPqCRySo3V6djh8P7sgaI/CjlFRBYUyXyWB3OOXvw/BMJQnUf0fBgML03prDG22IffabB1bQ==}
 
   '@tsrx/oxc-darwin-arm64@0.18.0':
     resolution: {integrity: sha512-0/SM6yIlIDgM0KIE2t5DXRpMpbIPUDPWc7u2UEv+klLVD25EkKUt87Jq5gDwjZLFBKGCgnZ+kA778JYktdoMfQ==}
@@ -20613,8 +20620,8 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
-  '@tsrx/prettier-plugin@0.5.2':
-    resolution: {integrity: sha512-W7RSghM21mDRkrB1d6jQFmqwQ9hAlcixiZfkTg87DC4xqXRLXrlFcW2XGCX6qgK26rhsEVkm0hK0TDjo1dZ3TA==}
+  '@tsrx/prettier-plugin@0.6.2':
+    resolution: {integrity: sha512-GmTuJ0eJP6e1zBXl02IFliFR+/JNXAUewAoD86iM4wqT8pHpw0imbL+dNBoNxVolf9txdlG5XGX4D1rnYtqpiQ==}
     peerDependencies:
       prettier: '>=3.6.0'
 
@@ -20623,8 +20630,8 @@ packages:
     peerDependencies:
       react: '>=18'
 
-  '@tsrx/react@0.4.2':
-    resolution: {integrity: sha512-E6wTiZiZ4DPNZu1B/gs95rqnO07KeW0vXCWPqkYDwe1pDDrB3o4TLNh7dl/Q848ftZuiSx3jHapc64LlM3Mtwg==}
+  '@tsrx/react@0.4.4':
+    resolution: {integrity: sha512-XNdi0NFfgVkKx0upFClKSwUs7uZmlzU7mkop85NDcr7WFOkVkKLqRR3aDcPxqu70YYOUWPnL8pmHpjhPoMgivg==}
     peerDependencies:
       react: '>=18'
 
@@ -20648,24 +20655,27 @@ packages:
       '@solidjs/web': 2.0.0-rc.3
       solid-js: 2.0.0-rc.3
 
-  '@tsrx/solid@0.3.2':
-    resolution: {integrity: sha512-4WPSDnJE+8q/crQbG9Qs/U/TLAp0nAbHecL3W2Jggghq4X/uYBwuMcCGdYZu34n2bOM5/zvz8LDEN9SLZ1BZpg==}
+  '@tsrx/solid@0.3.4':
+    resolution: {integrity: sha512-h8wKycE1Azgt5FaNsT19nbmU8Y6dTW5zhhA81fBkm7yWgb22+sa6G5QQ1BHzez6b4YQ9Cdpl8wnp5H+4RT5YOw==}
     peerDependencies:
       '@solidjs/web': 2.0.0-rc.3
       solid-js: 2.0.0-rc.3
 
-  '@tsrx/typescript-plugin@0.5.2':
-    resolution: {integrity: sha512-oUWjrrFGgk6+RRzgJeP2MYoSrpBDfNxhQRpOOK1roDW7X7ntsTe43A3d+Vh+qoCFIXQJ96R+vNk4LOG765Y2dA==}
+  '@tsrx/typescript-plugin@0.6.2':
+    resolution: {integrity: sha512-9t+QN1eAfKs6nXPq8FjUh+891jBSgdCaW4h9yjMV54tU2N80An/yOZijW56kafmgrZeXtKf9DJVlU0/CQAfmbQ==}
     hasBin: true
     peerDependencies:
-      '@tsrx/preact': 0.3.2
-      '@tsrx/react': 0.4.2
+      '@tsrx/content-mapper': 0.1.2
+      '@tsrx/preact': 0.3.4
+      '@tsrx/react': 0.4.4
       '@tsrx/ripple': ^0.2.0
-      '@tsrx/solid': 0.3.2
-      '@tsrx/vue': 0.3.2
+      '@tsrx/solid': 0.3.4
+      '@tsrx/vue': 0.3.4
       octane: '*'
-      typescript: ^5.9.3
+      typescript: ^5.9.3 || ^6.0.0 || ^7.1.0-dev.20260923.1
     peerDependenciesMeta:
+      '@tsrx/content-mapper':
+        optional: true
       '@tsrx/preact':
         optional: true
       '@tsrx/react':
@@ -20678,14 +20688,16 @@ packages:
         optional: true
       octane:
         optional: true
+      typescript:
+        optional: true
 
-  '@tsrx/vite-plugin-react@0.0.117':
-    resolution: {integrity: sha512-9cTQzNXx4oXAynjcp+lFLA/Cw+Y0DDvOJBVLq/QhhHwMsCp/bpffMZVRfipwinP/ScTXKYr6FJ7d7iG5e6WmLg==}
+  '@tsrx/vite-plugin-react@0.0.119':
+    resolution: {integrity: sha512-vRLPIFDxDXif4ZcJ8xHnrnFZIu09Uq3giVVJ5QQRwyPpaXdWOfMBM4pbr8AmtyKZgYzCXfHvUQ0hEXIE6dVFkQ==}
     peerDependencies:
       vite: '*'
 
-  '@tsrx/vite-plugin-solid@0.0.114':
-    resolution: {integrity: sha512-Ns2O4FTrZJ8CtjJVTJkoLas3aj0c2ZQX9+sp1mLaF4l/PVWkGMF/va8VRFiPP+XB0ubYO138E6O+L2lNCoQ+FQ==}
+  '@tsrx/vite-plugin-solid@0.0.116':
+    resolution: {integrity: sha512-E4y+6cTbU24ogANYbH91eoMF/FcAQR+nDhIj4bZ7FeuLqb5G2a13CybMjPwb/OhLsq6FS9ZmJbJdoZT2pVupgA==}
     peerDependencies:
       vite: '*'
 
@@ -48129,7 +48141,7 @@ snapshots:
       minimatch: 10.2.5
       path-browserify: 1.0.1
 
-  '@tsrx/content-mapper@0.1.1':
+  '@tsrx/content-mapper@0.1.2':
     dependencies:
       jsonc-parser: 3.3.1
 
@@ -48149,7 +48161,7 @@ snapshots:
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  '@tsrx/core@0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)':
+  '@tsrx/core@0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
       '@noble/hashes': 2.2.0
@@ -48210,9 +48222,9 @@ snapshots:
       - svelte
       - vite-plus
 
-  '@tsrx/prettier-plugin@0.5.2(prettier@3.9.9)':
+  '@tsrx/prettier-plugin@0.6.2(prettier@3.9.9)':
     dependencies:
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       prettier: 3.9.9
     transitivePeerDependencies:
       - '@typescript-eslint/types'
@@ -48242,9 +48254,9 @@ snapshots:
       '@tsrx/runtime': 0.2.4
       react: 19.2.8
 
-  '@tsrx/react@0.4.2(react@18.2.0)':
+  '@tsrx/react@0.4.4(react@18.2.0)':
     dependencies:
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@tsrx/react-runtime': 0.1.12(react@18.2.0)
       esrap: 2.3.2
       react: 18.2.0
@@ -48252,9 +48264,9 @@ snapshots:
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  '@tsrx/react@0.4.2(react@19.0.0)':
+  '@tsrx/react@0.4.4(react@19.0.0)':
     dependencies:
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@tsrx/react-runtime': 0.1.12(react@19.0.0)
       esrap: 2.3.2
       react: 19.0.0
@@ -48262,9 +48274,9 @@ snapshots:
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  '@tsrx/react@0.4.2(react@19.2.3)':
+  '@tsrx/react@0.4.4(react@19.2.3)':
     dependencies:
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@tsrx/react-runtime': 0.1.12(react@19.2.3)
       esrap: 2.3.2
       react: 19.2.3
@@ -48272,9 +48284,9 @@ snapshots:
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  '@tsrx/react@0.4.2(react@19.2.7)':
+  '@tsrx/react@0.4.4(react@19.2.7)':
     dependencies:
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@tsrx/react-runtime': 0.1.12(react@19.2.7)
       esrap: 2.3.2
       react: 19.2.7
@@ -48282,9 +48294,9 @@ snapshots:
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  '@tsrx/react@0.4.2(react@19.2.8)':
+  '@tsrx/react@0.4.4(react@19.2.8)':
     dependencies:
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@tsrx/react-runtime': 0.1.12(react@19.2.8)
       esrap: 2.3.2
       react: 19.2.8
@@ -48334,10 +48346,10 @@ snapshots:
       solid-js: 2.0.0-rc.3
     optional: true
 
-  '@tsrx/solid@0.3.2(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)':
+  '@tsrx/solid@0.3.4(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)':
     dependencies:
       '@solidjs/web': 2.0.0-beta.20(solid-js@2.0.0-beta.20)
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@tsrx/solid-runtime': 0.1.12(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)
       esrap: 2.3.2
       solid-js: 2.0.0-beta.20
@@ -48345,10 +48357,10 @@ snapshots:
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  '@tsrx/solid@0.3.2(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3)':
+  '@tsrx/solid@0.3.4(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3)':
     dependencies:
       '@solidjs/web': 2.0.0-rc.3(solid-js@2.0.0-rc.3)
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
       '@tsrx/solid-runtime': 0.1.12(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3)
       esrap: 2.3.2
       solid-js: 2.0.0-rc.3
@@ -48357,30 +48369,33 @@ snapshots:
       - '@typescript-eslint/types'
     optional: true
 
-  '@tsrx/typescript-plugin@0.5.2(@tsrx/react@0.4.2(react@19.2.8))(@tsrx/ripple@0.2.0(typescript@5.9.3))(@tsrx/solid@0.3.2(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3))(octane@packages+octane)(typescript@5.9.3)':
+  '@tsrx/typescript-plugin@0.6.2(@tsrx/content-mapper@0.1.2)(@tsrx/react@0.4.4(react@19.2.8))(@tsrx/ripple@0.2.0(typescript@5.9.3))(@tsrx/solid@0.3.4(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3))(octane@packages+octane)(typescript@5.9.3)':
     dependencies:
       '@volar/language-core': 2.4.28
       '@volar/typescript': 2.4.28
-      typescript: 5.9.3
+      jsonc-parser: 3.3.1
+      resolve-pkg-maps: 1.0.0
     optionalDependencies:
-      '@tsrx/react': 0.4.2(react@19.2.8)
+      '@tsrx/content-mapper': 0.1.2
+      '@tsrx/react': 0.4.4(react@19.2.8)
       '@tsrx/ripple': 0.2.0(typescript@5.9.3)
-      '@tsrx/solid': 0.3.2(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3)
+      '@tsrx/solid': 0.3.4(@solidjs/web@2.0.0-rc.3(solid-js@2.0.0-rc.3))(solid-js@2.0.0-rc.3)
       octane: link:packages/octane
+      typescript: 5.9.3
 
-  '@tsrx/vite-plugin-react@0.0.117(react@19.2.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))':
+  '@tsrx/vite-plugin-react@0.0.119(react@19.2.7)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
-      '@tsrx/react': 0.4.2(react@19.2.7)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/react': 0.4.4(react@19.2.7)
       vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@typescript-eslint/types'
       - react
 
-  '@tsrx/vite-plugin-solid@0.0.114(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))':
+  '@tsrx/vite-plugin-solid@0.0.116(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:
-      '@tsrx/core': 0.5.2(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
-      '@tsrx/solid': 0.3.2(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)
+      '@tsrx/core': 0.5.4(patch_hash=3759a0ea5106efaf0d05ac32966a0fc41ddb247a40f096cfc6e8f6af1a21b713)
+      '@tsrx/solid': 0.3.4(@solidjs/web@2.0.0-beta.20(solid-js@2.0.0-beta.20))(solid-js@2.0.0-beta.20)
       vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@solidjs/web'

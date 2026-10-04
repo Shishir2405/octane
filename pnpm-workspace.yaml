@@ -171,6 +171,14 @@ catalogs:
     '@rsbuild/core': 2.1.4
     '@rspack/core': 2.1.3
     typescript: 5.9.3
+  # TypeScript 7 for octane-tsc, which type-checks `.tsrx` through
+  # `tsc --runExternalCode` and @tsrx/content-mapper. It has no JavaScript API,
+  # so every tool that imports `typescript` stays on the default catalog.
+  # Later nightlies (through 7.1.0-dev.20261004.1) report false TS7031 errors
+  # for a `{ … } = {}` parameter default (microsoft/TypeScript#64431); move on
+  # once a nightly includes the fix (microsoft/TypeScript#64440).
+  native:
+    typescript: 7.1.0-dev.20260921.1
   default:
     babel-plugin-inferno: 6.8.5
     '@react-rxjs/core': 0.10.8
@@ -294,14 +302,15 @@ catalogs:
     '@vitest/coverage-v8': 4.1.10
     '@volar/language-core': 2.4.28
     '@volar/typescript': 2.4.28
-    '@tsrx/core': ^0.5.2
-    '@tsrx/prettier-plugin': ^0.5.2
-    '@tsrx/typescript-plugin': ^0.5.2
+    '@tsrx/content-mapper': 0.1.2
+    '@tsrx/core': ^0.5.4
+    '@tsrx/prettier-plugin': ^0.6.2
+    '@tsrx/typescript-plugin': ^0.6.2
     '@tsrx/ripple': ^0.2.0
-    '@tsrx/react': ^0.4.2
-    '@tsrx/solid': ^0.3.2
-    '@tsrx/vite-plugin-react': ^0.0.117
-    '@tsrx/vite-plugin-solid': ^0.0.114
+    '@tsrx/react': ^0.4.4
+    '@tsrx/solid': ^0.3.4
+    '@tsrx/vite-plugin-react': ^0.0.119
+    '@tsrx/vite-plugin-solid': ^0.0.116
     '@types/babel__core': 7.20.5
     '@types/d3-array': 3.0.3
     '@types/d3-chord': ^1.0.14
@@ -607,14 +616,14 @@ minimumReleaseAgeExclude:
   - '@tsrx/oxc@0.18.0'
   - '@ripple-ts/adapter@0.4.0'
   - '@ripple-ts/vite-plugin@0.4.0'
-  - '@tsrx/core@0.5.2'
-  - '@tsrx/prettier-plugin@0.5.2'
-  - '@tsrx/react@0.4.2'
+  - '@tsrx/core@0.5.4'
+  - '@tsrx/prettier-plugin@0.6.2'
+  - '@tsrx/react@0.4.4'
   - '@tsrx/ripple@0.2.0'
-  - '@tsrx/solid@0.3.2'
-  - '@tsrx/typescript-plugin@0.5.2'
-  - '@tsrx/vite-plugin-react@0.0.117'
-  - '@tsrx/vite-plugin-solid@0.0.114'
+  - '@tsrx/solid@0.3.4'
+  - '@tsrx/typescript-plugin@0.6.2'
+  - '@tsrx/vite-plugin-react@0.0.119'
+  - '@tsrx/vite-plugin-solid@0.0.116'
   - ripple@0.4.0
   - '@tsrx/runtime@0.2.4'
   - '@tsrx/react-runtime@0.1.12'
@@ -634,7 +643,7 @@ minimumReleaseAgeExclude:
 # (https://github.com/tsrx-org/tsrx/pull/143) in @tsrx/core >= 0.3.0.
 patchedDependencies:
   # Two @tsrx/core fixes not yet released upstream in tsrx-org/tsrx (checked
-  # through 0.5.2); drop each once an adopted release includes it.
+  # through 0.5.4); drop each once an adopted release includes it.
   # - Resolve a parenthesized `<style>` block as a style `apply` target. The
   #   formatter wraps a multi-line assigned block, `const theme = (<style>…</style>);`,
   #   and the editor parse keeps the parentheses (`preserveParens`), so
@@ -647,7 +656,7 @@ patchedDependencies:
   # SCOPE: like every entry here, this does not ship in the published octane
   # tarball; consumers resolve unpatched @tsrx/core until an upstream release is
   # adopted.
-  '@tsrx/core@0.5.2': patches/@tsrx__core@0.5.2.patch
+  '@tsrx/core@0.5.4': patches/@tsrx__core@0.5.4.patch
   # Preserve sibling package URLs when browser mocks share a directory-name prefix.
   # Browser ships its own prebundled copy of the mocker implementation.
   '@vitest/browser@4.1.10': patches/@vitest__browser@4.1.10.patch
