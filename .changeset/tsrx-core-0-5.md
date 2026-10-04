@@ -2,7 +2,7 @@
 'octane': patch
 ---
 
-Update the shared TSRX compiler dependencies to `@tsrx/core` 0.5.4 and
+Update the shared TSRX compiler dependencies to `@tsrx/core` 0.5.5 and
 `@tsrx/oxc` 0.18.0.
 
 The parser now gives template markup TSX's exact tree: the indentation between
