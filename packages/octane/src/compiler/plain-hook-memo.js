@@ -6,6 +6,7 @@ import { builders as b, clone_ast_node as cloneAstNode, withDeferredImports } fr
 import { print as esrapPrint } from 'esrap';
 import esrapTsx from 'esrap/languages/tsx';
 import { METHOD_DEP_IMPORT } from './hook-deps.js';
+import { INITIAL_VALUE_HOOKS, SPREAD_PATH_SLOT_HOOKS } from './hook-names.js';
 import { nativeReadActivationIndex } from './native-read-codegen.js';
 import { signalHookCallSite } from './signal-declarations.js';
 import { adaptManualHookProviders } from './manual-hooks.js';
@@ -55,19 +56,19 @@ function mapChildren(node, visit) {
 }
 
 function walkNodes(root, visit) {
-	function walk(node) {
+	function walk(node, parent, field) {
 		if (node === null || typeof node !== 'object') return;
 		if (Array.isArray(node)) {
-			for (const child of node) walk(child);
+			for (const child of node) walk(child, parent, field);
 			return;
 		}
-		if (visit(node) === false) return;
+		if (visit(node, parent, field) === false) return;
 		for (const key in node) {
 			if (META_KEYS.has(key) || key.startsWith('_octane')) continue;
-			walk(node[key]);
+			walk(node[key], node, key);
 		}
 	}
-	walk(root);
+	walk(root, null, null);
 }
 
 function collectUsedNames(ast) {
@@ -117,10 +118,12 @@ function allocateHookSlot(state, origin, hookNames = null) {
 		slot = pure(b.call(requireHelper(state, 'signalHookSite'), slot, b.literal(site)));
 	}
 	state.slotDeclarations.push(inheritHookMemoOrigin(b.const(name, slot), origin));
-	return b.id(name, origin);
+	return { ...b.id(name, origin), _octaneCompilerSlot: true };
 }
 
-function inferredDependencyArray(inferred, state, origin) {
+// A null inference runs the hook on every render.
+function inferredDependencyList(inferred, state, origin) {
+	if (inferred.dependencies === null) return inheritHookMemoOrigin(b.literal(null), origin);
 	return inheritHookMemoOrigin(
 		b.array(
 			inferred.dependencies.map((dependency) =>
@@ -131,7 +134,9 @@ function inferredDependencyArray(inferred, state, origin) {
 							b.literal(dependency.method.name),
 							...(dependency.method.guarded ? [b.literal(true)] : []),
 						)
-					: cloneAstNode(dependency.node),
+					: dependency.stable === true
+						? { ...cloneAstNode(dependency.node), _octaneStableRead: true }
+						: cloneAstNode(dependency.node),
 			),
 		),
 		origin,
@@ -216,7 +221,7 @@ function slotBaseHooks(ast, state, options) {
 		const mapped = mapChildren(node, visit);
 		const args = mapped.arguments.slice();
 		if (inferred !== undefined) {
-			args.splice(inferred.depsIndex, 0, inferredDependencyArray(inferred, state, node));
+			args.splice(inferred.depsIndex, 0, inferredDependencyList(inferred, state, node));
 		}
 		let callee = mapped.callee;
 		if (options.getterCalls.has(node) && options.stateGetterHelpers[imported]) {
@@ -227,7 +232,7 @@ function slotBaseHooks(ast, state, options) {
 		}
 		if (slot !== null) {
 			if (
-				(imported === 'useState' || imported === 'useRef') &&
+				SPREAD_PATH_SLOT_HOOKS.has(imported) &&
 				args.some((arg) => arg.type === 'SpreadElement')
 			) {
 				const fn = mapped.typeArguments
@@ -244,7 +249,7 @@ function slotBaseHooks(ast, state, options) {
 					arguments: [slot, fn, ...args],
 				};
 			}
-			if (args.length === 0 && (imported === 'useState' || imported === 'useRef'))
+			if (args.length === 0 && INITIAL_VALUE_HOOKS.has(imported))
 				args.push(b.id('undefined', node));
 			args.push(slot);
 		}
@@ -280,24 +285,117 @@ function collectComments(ast) {
 	return [...comments.values()].sort((left, right) => left.start - right.start);
 }
 
-// esrap prints these through their parent, which writes their contents
-// itself: `TSEnumDeclaration` prints `body.members` and never visits the body.
-const PRINTED_BY_PARENT = new Set(['TSEnumBody']);
+// esrap's visitor for each listed parent field prints these nodes itself, so
+// they have no visitor of their own. They are printable only in those fields.
+// TSTemplateLiteralType.quasis is deliberately absent: esrap 2.3 drops the
+// final quasi (the parser emits template literal types as a TSLiteralType
+// over a TemplateLiteral, so authored code never reaches that visitor).
+const PARENT_PRINTED = new Map([
+	['TemplateElement', ['TemplateLiteral.quasis']],
+	['SwitchCase', ['SwitchStatement.cases']],
+	['CatchClause', ['TryStatement.handler']],
+	['ImportDefaultSpecifier', ['ImportDeclaration.specifiers']],
+	['ImportNamespaceSpecifier', ['ImportDeclaration.specifiers']],
+	[
+		'ImportAttribute',
+		[
+			'ImportDeclaration.attributes',
+			'ExportNamedDeclaration.attributes',
+			'ExportAllDeclaration.attributes',
+		],
+	],
+	['TSDeclareMethod', ['MethodDefinition.value']],
+	['TSEnumBody', ['TSEnumDeclaration.body']],
+]);
+
+// esrap 2.3 has a visitor for each of these shapes, but it would print other
+// code: a build error, different runtime behavior, or lost authored types.
+function misprints(node) {
+	switch (node.type) {
+		case 'TSModuleDeclaration':
+			// It reads `global`, not the parser's `kind`, and writes `global global`.
+			return node.kind === 'global' && node.global !== true;
+		case 'ImportDeclaration':
+			// `import type {} from 'x'` would become the side-effect `import 'x'`.
+			return node.importKind === 'type' && node.specifiers.length === 0;
+		case 'ChainExpression':
+			return nonNullEndsChain(node);
+		case 'AssignmentExpression':
+		case 'AssignmentPattern':
+			// An assignment target cast loses its parentheses: `x as T = value`.
+			return isTypeCast(node.left);
+		case 'UpdateExpression':
+			return isTypeCast(node.argument);
+		case 'MethodDefinition':
+			// It writes `abstract` before the accessibility and `override` before `static`.
+			return (node.abstract && node.accessibility != null) || (node.static && node.override);
+		case 'Property':
+			// A concise method writes its own parameters, without type parameters.
+			return (
+				node.value.type === 'FunctionExpression' &&
+				(node.method || node.kind !== 'init') &&
+				node.value.typeParameters != null
+			);
+		case 'ArrayPattern':
+			return node.typeAnnotation != null;
+		case 'ClassDeclaration':
+		case 'ClassExpression':
+			// The parser reads `extends Base<T>` before a line-broken body as an
+			// instantiation expression, printed as `extends (Base<T>)`.
+			return node.superClass?.type === 'TSInstantiationExpression';
+		case 'TaggedTemplateExpression':
+			return node.typeArguments != null;
+	}
+	return false;
+}
+
+function isTypeCast(node) {
+	return node.type === 'TSAsExpression' || node.type === 'TSSatisfiesExpression';
+}
+
+// esrap parenthesizes a non-null assertion used as a member object or callee.
+// Followed by a non-optional link, with an optional link below it, `a?.b!.c`
+// would print as `(a?.b!).c` and throw where it short-circuited on a nullish
+// `a`. (`(a?.b!)?.c` still short-circuits, so an optional link above is safe.)
+function nonNullEndsChain(chain) {
+	let wrapped = false;
+	let node = chain.expression;
+	while (true) {
+		if (node.type === 'TSNonNullExpression') {
+			node = node.expression;
+		} else if (node.type === 'MemberExpression' || node.type === 'CallExpression') {
+			if (wrapped && node.optional) return true;
+			const inner = node.type === 'MemberExpression' ? node.object : node.callee;
+			if (inner.type === 'TSNonNullExpression' && !node.optional) wrapped = true;
+			node = inner;
+		} else {
+			return false;
+		}
+	}
+}
 
 function canPrintProgram(ast, visitors) {
 	let supported = true;
-	walkNodes(ast, (node) => {
+	walkNodes(ast, (node, parent, field) => {
 		if (
 			typeof node.type === 'string' &&
 			typeof visitors[node.type] !== 'function' &&
-			!PRINTED_BY_PARENT.has(node.type)
+			!PARENT_PRINTED.get(node.type)?.includes(`${parent?.type}.${field}`)
 		) {
 			supported = false;
-			return false;
 		}
 		return supported;
 	});
 	return supported;
+}
+
+function printsFaithfully(program) {
+	let faithful = true;
+	walkNodes(program, (node) => {
+		if (misprints(node)) faithful = false;
+		return faithful;
+	});
+	return faithful;
 }
 
 /**
@@ -319,19 +417,8 @@ export function inlinePlainHookMemos(ast, source, id, options) {
 	// The existing parallel-use pass has its own grouping and warm behavior.
 	// Keep those modules entirely on that path until both transforms share AST.
 	if (!hasMemo || hasUse) return null;
-	// esrap does not print an import's `phase`; without the wrapper an authored
-	// `import.defer()` would reprint as an eager `import()`.
-	const visitors = withDeferredImports(
-		esrapTsx({
-			comments: collectComments(ast),
-			getLeadingComments: (node) =>
-				node.__octanePure ||
-				(node.type === 'CallExpression' && options.pureCalls?.get(node.start) === node.end)
-					? PURE_COMMENTS
-					: undefined,
-		}),
-	);
-	if (!canPrintProgram(ast, visitors)) return null;
+	const print = createPlainProgramPrinter(ast, options.pureCalls);
+	if (print === null) return null;
 	const state = {
 		filename: id,
 		nativeReads: options.nativeReads === true,
@@ -397,20 +484,48 @@ export function inlinePlainHookMemos(ast, source, id, options) {
 						...transformed.body.slice(start),
 					],
 	};
-	// One TS-preserving print, with real mappings. Never feed this generated code
-	// back through the surgical pass or parse it into a second compiler pipeline.
-	try {
-		const printed = esrapPrint(program, visitors, {
-			sourceMapSource: id,
-			sourceMapContent: source,
-		});
-		return { code: printed.code, map: printed.map };
-	} catch {
-		// A parser can support a TypeScript shape before its esrap visitor does.
-		// Unsupported authored syntax must remain the host toolchain's input,
-		// rather than becoming a production-only compiler error.
-		return null;
-	}
+	return print(program, source, id);
+}
+
+/**
+ * The tier's single print of a Program, or null for one it must not print:
+ * esrap has no visitor for some authored node, or misprints one. The authored
+ * Program decides the visitors and comments; `program` may have replaced some
+ * of its shapes.
+ */
+export function createPlainProgramPrinter(ast, pureCalls) {
+	// esrap does not print an import's `phase`; without the wrapper an authored
+	// `import.defer()` would reprint as an eager `import()`.
+	const visitors = withDeferredImports(
+		esrapTsx({
+			comments: collectComments(ast),
+			getLeadingComments: (node) =>
+				node.__octanePure ||
+				(node.type === 'CallExpression' && pureCalls?.get(node.start) === node.end)
+					? PURE_COMMENTS
+					: undefined,
+		}),
+	);
+	if (!canPrintProgram(ast, visitors)) return null;
+	return (program, source, id) => {
+		// Check the Program as printed: the hook lowering can replace an authored
+		// shape that esrap would misprint.
+		if (!printsFaithfully(program)) return null;
+		// One TS-preserving print, with real mappings. Never feed this generated code
+		// back through the surgical pass or parse it into a second compiler pipeline.
+		try {
+			const printed = esrapPrint(program, visitors, {
+				sourceMapSource: id,
+				sourceMapContent: source,
+			});
+			return { code: printed.code, map: printed.map };
+		} catch {
+			// A parser can support a TypeScript shape before its esrap visitor does.
+			// Unsupported authored syntax must remain the host toolchain's input,
+			// rather than becoming a production-only compiler error.
+			return null;
+		}
+	};
 }
 import {
 	hookMethodName,

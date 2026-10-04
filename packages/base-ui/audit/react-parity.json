@@ -37,7 +37,7 @@
       "arch": "any",
       "packageManager": "pnpm@11.15.1",
       "lockfile": "pnpm-lock.yaml",
-      "lockfileSha256": "5b8c4e27ad47131a6c9f685bd2830cea98337de25a53cad55c34c35b231dc033"
+      "lockfileSha256": "6f5612e81bb8f008db202ae6603c3f256b5f908a45bfbb4f15a79cc00869e010"
     }
   },
   "lanes": [
@@ -62,7 +62,7 @@
         {
           "path": "packages/base-ui/scripts/build-react-parity-manifest.mjs",
           "role": "support",
-          "sha256": "59821bb0b0688a560d05ccd433a291bcb137486c8d12869cdd8213842533207d"
+          "sha256": "777405405a1d2e3385dda5caa0af93d7d2141a45adeecc333e9dfbad83824541"
         },
         {
           "path": "packages/base-ui/scripts/build-runtime-inventories.mjs",
@@ -174,7 +174,7 @@
         {
           "path": "packages/base-ui/scripts/build-react-parity-manifest.mjs",
           "role": "support",
-          "sha256": "59821bb0b0688a560d05ccd433a291bcb137486c8d12869cdd8213842533207d"
+          "sha256": "777405405a1d2e3385dda5caa0af93d7d2141a45adeecc333e9dfbad83824541"
         },
         {
           "path": "packages/base-ui/scripts/build-runtime-inventories.mjs",
@@ -244,7 +244,7 @@
         {
           "path": "packages/base-ui/scripts/build-react-parity-manifest.mjs",
           "role": "support",
-          "sha256": "59821bb0b0688a560d05ccd433a291bcb137486c8d12869cdd8213842533207d"
+          "sha256": "777405405a1d2e3385dda5caa0af93d7d2141a45adeecc333e9dfbad83824541"
         },
         {
           "path": "packages/base-ui/scripts/build-runtime-inventories.mjs",
@@ -319,7 +319,7 @@
         {
           "path": "packages/base-ui/scripts/build-react-parity-manifest.mjs",
           "role": "support",
-          "sha256": "59821bb0b0688a560d05ccd433a291bcb137486c8d12869cdd8213842533207d"
+          "sha256": "777405405a1d2e3385dda5caa0af93d7d2141a45adeecc333e9dfbad83824541"
         },
         {
           "path": "packages/base-ui/scripts/build-runtime-inventories.mjs",
@@ -355,6 +355,11 @@
           "path": "patches/@vitest__browser@4.1.10.patch",
           "role": "support",
           "sha256": "d32609637593fc211ed808df6fbea6cb1da80adb049c0b0752bda8e1586d0ae0"
+        },
+        {
+          "path": "patches/@vitest__browser-playwright@4.1.10.patch",
+          "role": "support",
+          "sha256": "1957634122dfa6f4790b66e73a42343637af36d3fb182eb25e07fa261dbc27dd"
         },
         {
           "path": "patches/@vitest__mocker@4.1.10.patch",
@@ -404,7 +409,7 @@
         {
           "path": "packages/base-ui/scripts/build-react-parity-manifest.mjs",
           "role": "support",
-          "sha256": "59821bb0b0688a560d05ccd433a291bcb137486c8d12869cdd8213842533207d"
+          "sha256": "777405405a1d2e3385dda5caa0af93d7d2141a45adeecc333e9dfbad83824541"
         },
         {
           "path": "packages/base-ui/scripts/build-runtime-inventories.mjs",
@@ -440,6 +445,11 @@
           "path": "patches/@vitest__browser@4.1.10.patch",
           "role": "support",
           "sha256": "d32609637593fc211ed808df6fbea6cb1da80adb049c0b0752bda8e1586d0ae0"
+        },
+        {
+          "path": "patches/@vitest__browser-playwright@4.1.10.patch",
+          "role": "support",
+          "sha256": "1957634122dfa6f4790b66e73a42343637af36d3fb182eb25e07fa261dbc27dd"
         },
         {
           "path": "patches/@vitest__mocker@4.1.10.patch",
@@ -498,7 +508,7 @@
         {
           "path": "packages/base-ui/scripts/build-react-parity-manifest.mjs",
           "role": "support",
-          "sha256": "59821bb0b0688a560d05ccd433a291bcb137486c8d12869cdd8213842533207d"
+          "sha256": "777405405a1d2e3385dda5caa0af93d7d2141a45adeecc333e9dfbad83824541"
         }
       ]
     },
@@ -536,7 +546,7 @@
         {
           "path": "packages/base-ui/scripts/build-react-parity-manifest.mjs",
           "role": "support",
-          "sha256": "59821bb0b0688a560d05ccd433a291bcb137486c8d12869cdd8213842533207d"
+          "sha256": "777405405a1d2e3385dda5caa0af93d7d2141a45adeecc333e9dfbad83824541"
         }
       ]
     }

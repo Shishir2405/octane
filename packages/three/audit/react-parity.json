@@ -29,7 +29,7 @@
       "arch": "any",
       "packageManager": "pnpm@11.15.1",
       "lockfile": "pnpm-lock.yaml",
-      "lockfileSha256": "5b8c4e27ad47131a6c9f685bd2830cea98337de25a53cad55c34c35b231dc033"
+      "lockfileSha256": "6f5612e81bb8f008db202ae6603c3f256b5f908a45bfbb4f15a79cc00869e010"
     }
   },
   "lanes": [
@@ -137,7 +137,7 @@
         {
           "path": "packages/three/tests/hooks.test.ts",
           "role": "test",
-          "sha256": "4a8b86de71e2efb52e380be2ef481f6ae16f0d1aebd0ce654961b5871d7cb967",
+          "sha256": "aae7a0d04cdf0edafaf3fa214c50b06742caf050107a17788639fc1348f843a8",
           "cases": [
             {
               "id": "adapted:three-build-graph",
@@ -294,7 +294,7 @@
         {
           "path": "packages/three/typetests/renderer-local.test.ts",
           "role": "support",
-          "sha256": "effaff52eb7cc8acfbc6e9fa9ea98fff5a02e1e7f3fd98ba209173338b9a6fb0"
+          "sha256": "5f4dcea1d6fab8ab013fd0c14162780a659760a51539e6bad43d425cb1d4c5d1"
         },
         {
           "path": "packages/three/typetests/subpath-api.test.ts",

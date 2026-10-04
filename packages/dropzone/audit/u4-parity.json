@@ -1,7 +1,7 @@
 {
   "runtime": {
     "file": "src/index.tsrx",
-    "sha256": "ca0538e70b376850915a4272f9fafd08b78459eef7395e90fbba918e2af7173a"
+    "sha256": "f1bca80980463aeaf34dbb08dc9aa84a56b9d8a078418135e2bb49840170461e"
   },
   "probe": {
     "file": "tests/probes/dropzone.tsrx",
