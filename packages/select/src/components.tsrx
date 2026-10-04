@@ -27,8 +27,8 @@ type SvgProps = Octane.JSX.IntrinsicElements['svg'];
 
 export interface CommonComponentProps<
 	Option = unknown,
-	IsMulti extends boolean = boolean,
-	Group extends GroupBase<Option> = GroupBase<Option>,
+	_IsMulti extends boolean = boolean,
+	_Group extends GroupBase<Option> = GroupBase<Option>,
 > {
 	[key: string]: unknown;
 	className?: string;
@@ -545,8 +545,8 @@ export function Group(props: GroupProps) @{
 
 export interface MultiValueGenericProps<
 	Option = unknown,
-	IsMulti extends boolean = boolean,
-	Group extends GroupBase<Option> = GroupBase<Option>,
+	_IsMulti extends boolean = boolean,
+	_Group extends GroupBase<Option> = GroupBase<Option>,
 > {
 	children?: OctaneNode;
 	data: unknown;
@@ -563,8 +563,8 @@ export const MultiValueLabel = MultiValueGeneric;
 
 export interface MultiValueRemoveProps<
 	Option = unknown,
-	IsMulti extends boolean = boolean,
-	Group extends GroupBase<Option> = GroupBase<Option>,
+	_IsMulti extends boolean = boolean,
+	_Group extends GroupBase<Option> = GroupBase<Option>,
 > {
 	children?: OctaneNode;
 	data: unknown;
