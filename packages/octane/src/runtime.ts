@@ -14838,7 +14838,9 @@ const CHILDREN_CAPTURES: unique symbol = Symbol.for('octane.childrenCaptures') a
 // are part of the template that authored them, as `.tsx` children evaluated by
 // their parent are. markChildrenBlock records the signal owner that template
 // renders in, and scopeSignalOwner links the children's owner to it. A render
-// runs in an owner identity, which never retains its renderer tree.
+// runs in an owner identity, which never retains its renderer tree. Unlike
+// CHILDREN_BLOCK, the key is local to this runtime copy: another copy's owner
+// belongs to another document owner, which scopeSignalOwner never links.
 const CHILDREN_SIGNAL_OWNER: unique symbol = Symbol() as any;
 
 /**
