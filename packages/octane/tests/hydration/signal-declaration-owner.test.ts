@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 // still loads a fresh runtime graph and fixture helper after resetModules().
 import '../_server-fixture.js';
 
-// A component's directive arms, nested boundaries, keyed rows and nested
-// `@{ … }` blocks are part of its template, not separate feature instances. A
-// query declared by the component and read again from any of them is one
-// declaration and selection: one browser request, or the server's request
-// resumed during hydration.
+// A component's directive arms, nested boundaries, keyed rows, nested `@{ … }`
+// blocks and the children it passes to other components are part of its
+// template, not separate feature instances. A query declared by the component
+// and read again from any of them is one declaration and selection: one browser
+// request, or the server's request resumed during hydration.
 const READ = {
 	direct: 'record$.get() as string',
 	derived: 'selected$.get() as string',
@@ -26,6 +26,18 @@ function frames(output: string): Record<string, string> {
 		// Setup makes each block its own render scope rather than transparent grouping.
 		block: `@try { <div>@{ const label = 'block'; <p title={label}>${output}</p> }</div> } @pending { <i>waiting</i> }`,
 		'row block': `@try { <ul>@for (const item of props.items; key item) { <li>@{ const label = item; <p title={label}>${output}</p> }</li> }</ul> } @pending { <i>waiting</i> }`,
+		// Compiled children belong to the template that authored them, whichever
+		// component renders them: in a slot, forwarded through another component's
+		// children, created in a row, or rendered by a boundary or context provider.
+		children: `@try { <Card>${output}</Card> } @pending { <i>waiting</i> }`,
+		'forwarded children': `@try { <Wrapper>${output}</Wrapper> } @pending { <i>waiting</i> }`,
+		'row children': `@try { <ul>@for (const item of props.items; key item) { <li><Card>${output}</Card></li> }</ul> } @pending { <i>waiting</i> }`,
+		Suspense: `<Suspense fallback={<i>waiting</i>}>${output}</Suspense>`,
+		'Suspense row': `<Suspense fallback={<i>waiting</i>}><ul>@for (const item of props.items; key item) { <li>${output}</li> }</ul></Suspense>`,
+		ViewTransition: `@try { <ViewTransition>${output}</ViewTransition> } @pending { <i>waiting</i> }`,
+		// An alias keeps the component form the compiler would otherwise inline.
+		ErrorBoundary: `@try { <Boundary fallback={<b>error</b>}>${output}</Boundary> } @pending { <i>waiting</i> }`,
+		provider: `@try { <Context value="provided">${output}</Context> } @pending { <i>waiting</i> }`,
 	};
 }
 
@@ -33,10 +45,18 @@ const SHAPES = Object.keys(frames(''));
 
 // Builds a module whose declaring component is the root or a nested child.
 function source(body: string, nested: boolean, imports = 'derived$, query$'): string {
-	return `import { useEffect } from 'octane';
+	return `import { createContext, ErrorBoundary, Suspense, useEffect, ViewTransition } from 'octane';
 import { ${imports} } from 'octane/signals';
+const Context = createContext('');
+const Boundary = ErrorBoundary;
 function Boom() @{
  throw new Error('boom');
+}
+function Card(props) @{
+ <div>{props.children}</div>
+}
+function Wrapper(props) @{
+ <section><Card>{props.children}</Card></section>
 }
 ${
 	nested
@@ -363,6 +383,50 @@ export function App(props) @{
 				expect(view.texts()).toEqual(['2', 'pending', 'pending 1']);
 				await view.settleAll('value');
 				expect(view.texts()).toEqual(['2', '2value', '2value 1']);
+				expect(view.requests).toHaveLength(1);
+			} finally {
+				view.unmount();
+			}
+		},
+	);
+
+	// Card has state of its own and renders the children App passes it. They
+	// must compute from App's count$ cell, not a copy that never saw its update.
+	it.each(MODES)(
+		"computes a children read from the component's cells ($name)",
+		async ({ dev, strong }) => {
+			const view = await mountClient(
+				`import { useState } from 'octane';
+import { derived$, query$, signal$ } from 'octane/signals';
+function show(state) {
+ return state.status === 'ready' ? String(state.value) : state.status;
+}
+function Card(props) @{
+ const [tick, setTick] = useState(0);
+ <div>
+  <button id="card" onClick={() => setTick(tick + 1)}><output>{String(tick)}</output></button>
+  {props.children}
+ </div>
+}
+export function App(props) @{
+ const count$ = signal$(1);
+ const source$ = query$(() => 'source', props.load);
+ const label$ = derived$(() => count$.get() + source$.get());
+ <section>
+  <button id="count" onClick={() => count$.set(count$.get() + 1)}><output>{String(count$.get())}</output></button>
+  <output>{show(label$.snapshot()) as string}</output>
+  <Card><output>{show(label$.snapshot()) as string}</output></Card>
+ </section>
+}`,
+				{ dev, strong },
+			);
+			try {
+				expect(view.requests).toHaveLength(1);
+				view.click('#count');
+				view.click('#card');
+				expect(view.texts()).toEqual(['2', 'pending', '1', 'pending']);
+				await view.settleAll('value');
+				expect(view.texts()).toEqual(['2', '2value', '1', '2value']);
 				expect(view.requests).toHaveLength(1);
 			} finally {
 				view.unmount();
