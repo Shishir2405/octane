@@ -6,14 +6,14 @@
       "brotli": 2482
     },
     "framework": {
-      "raw": 118293,
-      "gzip": 39056,
-      "brotli": 34767
+      "raw": 118307,
+      "gzip": 39057,
+      "brotli": 34802
     },
     "total": {
-      "raw": 125805,
-      "gzip": 41619,
-      "brotli": 36990
+      "raw": 125819,
+      "gzip": 41620,
+      "brotli": 37026
     }
   },
   "todo": {
@@ -23,13 +23,13 @@
       "brotli": 2373
     },
     "framework": {
-      "raw": 136398,
-      "gzip": 44282,
+      "raw": 136412,
+      "gzip": 44283,
       "brotli": 39087
     },
     "total": {
-      "raw": 141508,
-      "gzip": 46759,
+      "raw": 141522,
+      "gzip": 46760,
       "brotli": 41207
     }
   },
@@ -40,13 +40,13 @@
       "brotli": 2891
     },
     "framework": {
-      "raw": 133975,
-      "gzip": 43712,
+      "raw": 133989,
+      "gzip": 43714,
       "brotli": 38598
     },
     "total": {
-      "raw": 140628,
-      "gzip": 46692,
+      "raw": 140642,
+      "gzip": 46691,
       "brotli": 41207
     }
   },
@@ -57,13 +57,13 @@
       "brotli": 7812
     },
     "framework": {
-      "raw": 150669,
-      "gzip": 49059,
-      "brotli": 43257
+      "raw": 150683,
+      "gzip": 49061,
+      "brotli": 42995
     },
     "total": {
-      "raw": 177348,
-      "gzip": 58092,
+      "raw": 177362,
+      "gzip": 58096,
       "brotli": 50571
     }
   },
@@ -74,13 +74,13 @@
       "brotli": 101927
     },
     "framework": {
-      "raw": 364526,
-      "gzip": 119322,
+      "raw": 364540,
+      "gzip": 119323,
       "brotli": 103857
     },
     "total": {
-      "raw": 720447,
-      "gzip": 241047,
+      "raw": 720461,
+      "gzip": 241048,
       "brotli": 205571
     }
   }
