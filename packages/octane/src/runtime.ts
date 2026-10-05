@@ -1117,17 +1117,19 @@ function scopeSignalOwner(scope: Scope | null): SignalOwner | undefined {
 			// block keeps an instance of its own for its declarations, and a fragment
 			// renderer carries the instance of the scope it renders for (the server
 			// renders it in that scope's owner). Both link to their template the same
-			// way. A block links to the scope that rendered it, which for a lightweight
-			// component is its scope rather than the DOM stand-in its blocks hang off.
-			const template = scope.signalInstanceSite === TEMPLATE_INVOCATION_SITE;
-			const parent = template
-				? scope.signalInstanceParent
-				: (scope.parent ?? scope.block.parentBlock);
+			// way. A renderer, even one inside a block, keeps its parent's key. A block
+			// adds a key segment and links to the scope that rendered it, which for a
+			// lightweight component is its scope rather than the DOM stand-in its
+			// blocks hang off.
+			let parent = scope.parent ?? scope.block.parentBlock;
 			if (
+				instanceKey !== undefined &&
 				parent !== null &&
-				!(parent instanceof LiteBlockImpl) &&
-				(instanceKey === undefined || template || resolveSignalInstanceKey(parent) === instanceKey)
+				resolveSignalInstanceKey(parent) !== instanceKey
 			)
+				parent =
+					scope.signalInstanceSite === TEMPLATE_INVOCATION_SITE ? scope.signalInstanceParent : null;
+			if (parent !== null && !(parent instanceof LiteBlockImpl))
 				identity.enclosingOwner = scopeSignalOwner(parent) as SignalRendererOwnerIdentity;
 			// A retry owner must not keep an abandoned renderer tree alive. This
 			// existing opaque identity object is also its own facade-state token.

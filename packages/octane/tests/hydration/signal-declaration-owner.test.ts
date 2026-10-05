@@ -506,6 +506,44 @@ ${nested ? 'export function App(props) @{\n <main><Feature {...props} /></main>\
 		},
 	);
 
+	// JSX a block evaluates as a value renders through renderers that carry the
+	// block's instance. A nested block inside them reads the block's declarations.
+	function valueSource(setup: string): string {
+		return `import { query$ } from 'octane/signals';
+export function App(props) @{
+ <section>
+  @{
+   const own$ = query$(() => 'own', props.load);
+   const state = own$.${setup};
+   const view = props.show ? <div>@{ const label = 'inner'; <p title={label}><output>{own$.get() as string}</output></p> }</div> : null;
+   <article><output>{${setup === 'get()' ? 'state' : 'state.status'} as string}</output>{view}</article>
+  }
+ </section>
+}`;
+	}
+
+	it.each(MODES)(
+		"starts one query for a block nested in its block's value JSX ($name)",
+		async ({ dev, strong }) => {
+			const view = await mountClient(valueSource('snapshot()'), { dev, strong });
+			try {
+				expect(view.requests).toHaveLength(1);
+				await view.settle('ready');
+				expect(view.texts()).toEqual(['ready', 'ready']);
+				expect(view.requests).toHaveLength(1);
+			} finally {
+				view.unmount();
+			}
+		},
+	);
+
+	it.each(MODES)(
+		"resumes the server query for a block nested in its block's value JSX ($name)",
+		async ({ dev, strong }) => {
+			await hydrateServerOutput(valueSource('get()'), { dev, strong, adoptsOutput: true });
+		},
+	);
+
 	it.each(MODES.flatMap((mode) => [false, true].map((nested) => ({ ...mode, nested }))))(
 		'resumes the server query for a nested block in returned JSX (nested: $nested, $name)',
 		async ({ dev, strong, nested }) => {
