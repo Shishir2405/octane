@@ -1129,6 +1129,11 @@ function scopeSignalOwner(scope: Scope | null): SignalOwner | undefined {
 			)
 				parent =
 					scope.signalInstanceSite === TEMPLATE_INVOCATION_SITE ? scope.signalInstanceParent : null;
+			// A stand-in records the scope its component is registered on.
+			if (parent instanceof LiteBlockImpl)
+				parent =
+					parent.signalInstanceParent?.children?.find((child) => child.scope.block === parent)
+						?.scope ?? null;
 			// Compiled children instead link to the owner of the template that authored
 			// them (see markChildrenBlock), whichever component renders them. A context
 			// provider renders them inline in its own block and declares nothing
@@ -1139,7 +1144,7 @@ function scopeSignalOwner(scope: Scope | null): SignalOwner | undefined {
 				CHILDREN_SIGNAL_OWNER
 			];
 			if (children?.documentOwner === documentOwner) identity.enclosingOwner = children;
-			else if (parent !== null && !(parent instanceof LiteBlockImpl))
+			else if (parent !== null)
 				identity.enclosingOwner = scopeSignalOwner(parent) as SignalRendererOwnerIdentity;
 			// A retry owner must not keep an abandoned renderer tree alive. This
 			// existing opaque identity object is also its own facade-state token.
